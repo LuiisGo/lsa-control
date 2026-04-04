@@ -4,7 +4,6 @@ import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
 import { LayoutDashboard, FileText, Truck, Users, Download, LogOut, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { LogoSA } from '@/components/LogoSA'
 
 interface Props {
   userName: string
@@ -29,7 +28,8 @@ export function AdminSidebar({ userName, userEmail }: Props) {
     <>
       {/* ── Mobile: header superior ─────────────────────── */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-30 bg-primary-800 text-white h-14 flex items-center px-4 gap-3 shadow-md">
-        <LogoSA size={34} variant="dark" className="shrink-0" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/LSA CONTROL.PNG" alt="Logo LSA" width={34} height={34} className="shrink-0 rounded-full object-contain" />
         <div className="flex-1 min-w-0">
           <p className="font-bold text-xs text-white leading-tight">Grupo Lechero</p>
           <p className="text-[10px] text-primary-300 uppercase tracking-wide">San Antonio</p>
@@ -69,7 +69,8 @@ export function AdminSidebar({ userName, userEmail }: Props) {
 
         {/* Logo grande en sidebar */}
         <div className="px-5 pt-6 pb-4 border-b border-white/10 flex flex-col items-center gap-3">
-          <LogoSA size={100} variant="dark" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/LSA CONTROL.PNG" alt="Logo Grupo Lechero San Antonio" width={100} height={100} className="rounded-full object-contain" />
           <div className="text-center">
             <p className="font-bold text-sm text-white tracking-wide">Grupo Lechero</p>
             <p className="text-[11px] text-primary-300 uppercase tracking-widest">San Antonio</p>

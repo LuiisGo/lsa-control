@@ -1,7 +1,6 @@
 'use client'
 import { signOut } from 'next-auth/react'
 import { LogOut, User } from 'lucide-react'
-import { LogoSA } from '@/components/LogoSA'
 
 interface Props {
   userName: string
@@ -13,7 +12,14 @@ export function EmpleadoHeader({ userName }: Props) {
       <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo + título */}
         <div className="flex items-center gap-2.5">
-          <LogoSA size={36} variant="dark" className="shrink-0" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/LSA CONTROL.PNG"
+            alt="Grupo Lechero San Antonio"
+            width={36}
+            height={36}
+            className="shrink-0 rounded-full object-contain"
+          />
           <div className="leading-tight">
             <p className="font-bold text-sm text-white">Grupo Lechero</p>
             <p className="text-[10px] text-primary-300 tracking-wide uppercase">San Antonio</p>

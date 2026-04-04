@@ -4,7 +4,6 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
 import { isWebAuthnAvailable, webAuthnAuthenticate } from '@/lib/webauthn'
-import { LogoSA } from '@/components/LogoSA'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -89,7 +88,14 @@ export default function LoginPage() {
 
         {/* ── Logo del sello ─────────────────────────────── */}
         <div className="mb-6 flex flex-col items-center gap-3">
-          <LogoSA size={140} variant="dark" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/LSA CONTROL.PNG"
+            alt="Grupo Lechero San Antonio"
+            width={140}
+            height={140}
+            className="rounded-full object-contain drop-shadow-lg"
+          />
           <div className="text-center">
             <h1 className="text-xl font-bold text-white tracking-wide">Control LSA</h1>
             <p className="text-primary-300 text-xs mt-0.5 tracking-wider uppercase">
