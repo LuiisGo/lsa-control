@@ -1,15 +1,16 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Loader2, Users, ToggleLeft, ToggleRight, Fingerprint, Eye, EyeOff, X, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, Users, ToggleLeft, ToggleRight, Fingerprint, Eye, EyeOff, X, AlertCircle, Trash2 } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { webAuthnRegister, isWebAuthnAvailable } from '@/lib/webauthn'
+import { ModalConfirmar } from '@/components/ModalConfirmar'
 import toast from 'react-hot-toast'
 
 interface Usuario {
   id: string
   nombre: string
-  email: string
+  username: string
   role: 'admin' | 'empleado'
   activo: boolean
 }
@@ -24,8 +25,10 @@ export default function UsuariosPage() {
   const [toggling, setToggling] = useState<string | null>(null)
   const [registering, setRegistering] = useState<string | null>(null)
   const [webAuthnAvail, setWebAuthnAvail] = useState(false)
+  const [deleteUsuario, setDeleteUsuario] = useState<Usuario | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
-  const [form, setForm] = useState({ nombre: '', email: '', role: 'empleado', password: '' })
+  const [form, setForm] = useState({ nombre: '', username: '', role: 'empleado', password: '' })
   const [showPassword, setShowPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -51,10 +54,20 @@ export default function UsuariosPage() {
     } finally { setToggling(null) }
   }
 
+  async function handleDelete() {
+    if (!deleteUsuario || !token) return
+    setDeleting(true)
+    try {
+      const res = await apiCall('deleteUsuario', { id: deleteUsuario.id }, token)
+      if (res.success) { toast.success('Usuario eliminado'); setDeleteUsuario(null); load() }
+      else toast.error(res.error ?? 'Error al eliminar')
+    } finally { setDeleting(false) }
+  }
+
   async function handleRegisterBiometric(u: Usuario) {
     setRegistering(u.id)
     try {
-      const ok = await webAuthnRegister(u.id, u.nombre, u.email)
+      const ok = await webAuthnRegister(u.id, u.nombre, u.username)
       if (ok) toast.success(`Biométrico registrado para ${u.nombre}`)
       else toast.error('No se pudo registrar el biométrico')
     } finally { setRegistering(null) }
@@ -63,7 +76,7 @@ export default function UsuariosPage() {
   function validateForm(): boolean {
     const errs: Record<string, string> = {}
     if (!form.nombre.trim()) errs.nombre = 'Requerido'
-    if (!form.email.trim() || !form.email.includes('@')) errs.email = 'Email inválido'
+    if (!form.username.trim()) errs.username = 'Requerido'
     if (!form.password || form.password.length < 6) errs.password = 'Mínimo 6 caracteres'
     setFormErrors(errs)
     return Object.keys(errs).length === 0
@@ -78,7 +91,7 @@ export default function UsuariosPage() {
       if (res.success) {
         toast.success('Usuario creado')
         setShowModal(false)
-        setForm({ nombre: '', email: '', role: 'empleado', password: '' })
+        setForm({ nombre: '', username: '', role: 'empleado', password: '' })
         load()
       } else {
         toast.error(res.error ?? 'Error al crear usuario')
@@ -116,7 +129,7 @@ export default function UsuariosPage() {
               <thead>
                 <tr>
                   <th>Nombre</th>
-                  <th>Email</th>
+                  <th>Usuario</th>
                   <th>Rol</th>
                   <th>Estado</th>
                   <th className="text-center">Acciones</th>
@@ -126,7 +139,7 @@ export default function UsuariosPage() {
                 {usuarios.map(u => (
                   <tr key={u.id}>
                     <td className="font-medium text-slate-800">{u.nombre}</td>
-                    <td className="text-slate-500 text-xs">{u.email}</td>
+                    <td className="text-slate-500 text-xs font-mono">{u.username}</td>
                     <td>
                       <span className={u.role === 'admin' ? 'badge-primary' : 'badge-slate'}>
                         {u.role}
@@ -169,6 +182,14 @@ export default function UsuariosPage() {
                             )}
                           </button>
                         )}
+                        <button
+                          onClick={() => setDeleteUsuario(u)}
+                          className="btn-ghost btn-icon hover:bg-danger-50"
+                          title="Eliminar usuario"
+                          aria-label="Eliminar usuario"
+                        >
+                          <Trash2 className="w-4 h-4 text-danger-500" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -190,16 +211,16 @@ export default function UsuariosPage() {
             <h2 className="text-base font-semibold text-slate-800 mb-5">Nuevo usuario</h2>
             <form onSubmit={handleAddUser} className="space-y-4">
               <div>
-                <label className="label label-required">Nombre</label>
+                <label className="label label-required">Nombre completo</label>
                 <input type="text" value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                  className={`input ${formErrors.nombre ? 'input-error' : ''}`} disabled={saving} />
+                  className={`input ${formErrors.nombre ? 'input-error' : ''}`} disabled={saving} placeholder="Ej: Juan Pérez" />
                 {formErrors.nombre && <p className="error-msg"><AlertCircle className="w-3.5 h-3.5" />{formErrors.nombre}</p>}
               </div>
               <div>
-                <label className="label label-required">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  className={`input ${formErrors.email ? 'input-error' : ''}`} disabled={saving} />
-                {formErrors.email && <p className="error-msg"><AlertCircle className="w-3.5 h-3.5" />{formErrors.email}</p>}
+                <label className="label label-required">Usuario</label>
+                <input type="text" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))}
+                  className={`input ${formErrors.username ? 'input-error' : ''}`} disabled={saving} placeholder="Ej: Juan01" />
+                {formErrors.username && <p className="error-msg"><AlertCircle className="w-3.5 h-3.5" />{formErrors.username}</p>}
               </div>
               <div>
                 <label className="label">Rol</label>
@@ -232,6 +253,17 @@ export default function UsuariosPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirm Modal */}
+      <ModalConfirmar
+        open={!!deleteUsuario}
+        title="Eliminar usuario"
+        message={`¿Eliminar al usuario "${deleteUsuario?.nombre}" (${deleteUsuario?.username})? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteUsuario(null)}
+        loading={deleting}
+      />
     </div>
   )
 }

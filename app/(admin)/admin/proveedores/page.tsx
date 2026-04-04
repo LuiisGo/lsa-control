@@ -1,8 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Loader2, Truck, ToggleLeft, ToggleRight, AlertCircle } from 'lucide-react'
+import { Plus, Loader2, Truck, ToggleLeft, ToggleRight, AlertCircle, Trash2 } from 'lucide-react'
 import { apiCall } from '@/lib/api'
+import { ModalConfirmar } from '@/components/ModalConfirmar'
 import toast from 'react-hot-toast'
 
 interface Proveedor {
@@ -21,6 +22,8 @@ export default function ProveedoresPage() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [deleteProveedor, setDeleteProveedor] = useState<Proveedor | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   async function load() {
     if (!token) return
@@ -62,6 +65,23 @@ export default function ProveedoresPage() {
       }
     } finally {
       setToggling(null)
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteProveedor || !token) return
+    setDeleting(true)
+    try {
+      const res = await apiCall('deleteProveedor', { id: deleteProveedor.id }, token)
+      if (res.success) {
+        toast.success('Proveedor eliminado')
+        setDeleteProveedor(null)
+        load()
+      } else {
+        toast.error(res.error ?? 'Error al eliminar')
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -124,26 +144,47 @@ export default function ProveedoresPage() {
                   </span>
                   {!p.activo && <span className="badge-slate text-xs">Inactivo</span>}
                 </div>
-                <button
-                  onClick={() => handleToggle(p)}
-                  disabled={toggling === p.id}
-                  className="btn-ghost btn-icon"
-                  aria-label={p.activo ? 'Desactivar' : 'Activar'}
-                  title={p.activo ? 'Desactivar' : 'Activar'}
-                >
-                  {toggling === p.id ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                  ) : p.activo ? (
-                    <ToggleRight className="w-5 h-5 text-success-600" />
-                  ) : (
-                    <ToggleLeft className="w-5 h-5 text-slate-400" />
-                  )}
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleToggle(p)}
+                    disabled={toggling === p.id}
+                    className="btn-ghost btn-icon"
+                    aria-label={p.activo ? 'Desactivar' : 'Activar'}
+                    title={p.activo ? 'Desactivar' : 'Activar'}
+                  >
+                    {toggling === p.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                    ) : p.activo ? (
+                      <ToggleRight className="w-5 h-5 text-success-600" />
+                    ) : (
+                      <ToggleLeft className="w-5 h-5 text-slate-400" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setDeleteProveedor(p)}
+                    className="btn-ghost btn-icon hover:bg-danger-50"
+                    aria-label="Eliminar proveedor"
+                    title="Eliminar proveedor"
+                  >
+                    <Trash2 className="w-4 h-4 text-danger-500" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {/* Delete Confirm Modal */}
+      <ModalConfirmar
+        open={!!deleteProveedor}
+        title="Eliminar proveedor"
+        message={`¿Eliminar el proveedor "${deleteProveedor?.nombre}"? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteProveedor(null)}
+        loading={deleting}
+      />
     </div>
   )
 }

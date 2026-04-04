@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { Calendar, Pencil, Trash2, Image as ImageIcon, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { Calendar, Pencil, Trash2, Image as ImageIcon, CheckCircle2, XCircle, Clock, AlertTriangle } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { ModalEditar } from '@/components/ModalEditar'
 import { ModalConfirmar } from '@/components/ModalConfirmar'
@@ -39,6 +39,8 @@ export default function RegistrosPage() {
   const [deleteCarga, setDeleteCarga] = useState<Carga | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [editMedicion, setEditMedicion] = useState(false)
+  const [confirmDeleteMedicion, setConfirmDeleteMedicion] = useState(false)
+  const [deletingMedicion, setDeletingMedicion] = useState(false)
 
   async function load(f: string) {
     if (!token) return
@@ -85,6 +87,16 @@ export default function RegistrosPage() {
     }, token)
     if (res.success) { toast.success('Medición actualizada'); setEditMedicion(false); load(fecha) }
     else toast.error(res.error ?? 'Error')
+  }
+
+  async function handleDeleteMedicion() {
+    if (!token) return
+    setDeletingMedicion(true)
+    try {
+      const res = await apiCall('deleteMedicion', { fecha }, token)
+      if (res.success) { toast.success('Medición eliminada'); setConfirmDeleteMedicion(false); load(fecha) }
+      else toast.error(res.error ?? 'Error al eliminar')
+    } finally { setDeletingMedicion(false) }
   }
 
   return (
@@ -169,9 +181,14 @@ export default function RegistrosPage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="section-title mb-0">Medición del día</h2>
           {medicion && (
-            <button onClick={() => setEditMedicion(true)} className="btn-secondary gap-2 text-xs">
-              <Pencil className="w-3.5 h-3.5" />Editar
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setEditMedicion(true)} className="btn-secondary gap-2 text-xs">
+                <Pencil className="w-3.5 h-3.5" />Editar
+              </button>
+              <button onClick={() => setConfirmDeleteMedicion(true)} className="btn-secondary gap-2 text-xs text-danger-600 hover:bg-danger-50 border-danger-200">
+                <Trash2 className="w-3.5 h-3.5" />Eliminar
+              </button>
+            </div>
           )}
         </div>
 
@@ -240,6 +257,16 @@ export default function RegistrosPage() {
         initialValues={{ litros_real_t1: medicion?.litros_real_t1 ?? 0, litros_real_t2: medicion?.litros_real_t2 ?? 0 }}
         onSave={handleSaveEditMedicion}
         onCancel={() => setEditMedicion(false)}
+      />
+
+      <ModalConfirmar
+        open={confirmDeleteMedicion}
+        title="Eliminar medición"
+        message={`¿Eliminar la medición del ${formatFecha(fecha)}? Esta acción no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        onConfirm={handleDeleteMedicion}
+        onCancel={() => setConfirmDeleteMedicion(false)}
+        loading={deletingMedicion}
       />
     </div>
   )
