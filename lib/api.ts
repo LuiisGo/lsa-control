@@ -7,6 +7,15 @@ export interface ApiResponse<T = unknown> {
   message?: string
 }
 
+/**
+ * Central API call function.
+ *
+ * - En el BROWSER → llama a /api/proxy (Next.js server-side proxy) para evitar CORS.
+ * - En el SERVIDOR (SSR / API routes) → llama directo al Apps Script.
+ *
+ * Esto significa que TODOS los componentes 'use client' funcionan sin CORS
+ * sin necesidad de cambiar nada en las páginas.
+ */
 export async function apiCall<T = unknown>(
   action: string,
   data?: Record<string, unknown>,
@@ -16,7 +25,10 @@ export async function apiCall<T = unknown>(
     const body: Record<string, unknown> = { action, ...data }
     if (token) body.token = token
 
-    const res = await fetch(API_URL, {
+    // Browser → proxy | Server → Apps Script directo
+    const url = typeof window !== 'undefined' ? '/api/proxy' : API_URL
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

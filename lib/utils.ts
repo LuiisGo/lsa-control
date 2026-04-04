@@ -109,6 +109,51 @@ export function downloadCSV(content: string, filename: string): void {
   URL.revokeObjectURL(url)
 }
 
+export function downloadXLSX(
+  rows: Record<string, unknown>[],
+  headers: { key: string; label: string }[],
+  filename: string,
+  sheetName = 'Datos'
+): void {
+  // Dynamic import to avoid SSR issues
+  import('xlsx').then(XLSX => {
+    // Build worksheet data: header row + data rows
+    const wsData: (string | number | null)[][] = [
+      headers.map(h => h.label),
+      ...rows.map(row =>
+        headers.map(h => {
+          const val = row[h.key]
+          if (val == null) return null
+          if (typeof val === 'number') return val
+          const num = Number(val)
+          return isNaN(num) ? String(val) : num
+        })
+      ),
+    ]
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData)
+
+    // Column widths
+    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.label.length + 4, 14) }))
+
+    // Header row bold styling (basic)
+    const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C })
+      if (!ws[cellAddr]) continue
+      ws[cellAddr].s = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '1E3A5F' } },
+        alignment: { horizontal: 'center' },
+      }
+    }
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    XLSX.writeFile(wb, filename)
+  })
+}
+
 export function imageToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

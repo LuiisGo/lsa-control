@@ -90,7 +90,7 @@ export default function LoginPage() {
         <div className="mb-6 flex flex-col items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/LSA CONTROL.PNG"
+            src="/LSA-Logo.png"
             alt="Grupo Lechero San Antonio"
             width={140}
             height={140}

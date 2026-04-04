@@ -9,29 +9,30 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "14.2.35",
-    "react": "^18",
-    "react-dom": "^18",
-    "next-auth": "^4.24.11",
-    "react-hot-toast": "^2.4.1",
-    "chart.js": "^4.4.4",
-    "react-chartjs-2": "^5.2.0",
     "@simplewebauthn/browser": "^10.0.0",
-    "idb": "^8.0.0",
-    "next-pwa": "^5.6.0",
-    "lucide-react": "^0.446.0",
+    "chart.js": "^4.4.4",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2"
+    "idb": "^8.0.0",
+    "lucide-react": "^0.446.0",
+    "next": "14.2.35",
+    "next-auth": "^4.24.11",
+    "next-pwa": "^5.6.0",
+    "react": "^18",
+    "react-chartjs-2": "^5.2.0",
+    "react-dom": "^18",
+    "react-hot-toast": "^2.4.1",
+    "tailwind-merge": "^2.5.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
     "autoprefixer": "^10.4.20",
     "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }

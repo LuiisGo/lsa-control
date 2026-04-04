@@ -14,7 +14,7 @@ export function EmpleadoHeader({ userName }: Props) {
         <div className="flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/LSA CONTROL.PNG"
+            src="/LSA-Logo.png"
             alt="Grupo Lechero San Antonio"
             width={36}
             height={36}

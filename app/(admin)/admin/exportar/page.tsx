@@ -3,20 +3,20 @@ import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { Download, Loader2, Calendar, FileSpreadsheet } from 'lucide-react'
 import { apiCall } from '@/lib/api'
-import { buildCSV, downloadCSV, getQuincenasRecientes, getTodayString } from '@/lib/utils'
+import { downloadXLSX, getQuincenasRecientes, getTodayString } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
-const CSV_HEADERS = [
-  { key: 'fecha', label: 'Fecha' },
-  { key: 'carga_t1', label: 'Carga T1 (L)' },
-  { key: 'carga_t2', label: 'Carga T2 (L)' },
-  { key: 'total_carga', label: 'Total Carga (L)' },
-  { key: 'real_t1', label: 'Real T1 (L)' },
-  { key: 'real_t2', label: 'Real T2 (L)' },
-  { key: 'total_real', label: 'Total Real (L)' },
-  { key: 'dif_litros', label: 'Diferencia Litros' },
-  { key: 'dif_pct', label: 'Diferencia %' },
-  { key: 'pipa', label: 'Envio Pipa (L)' },
+const HEADERS = [
+  { key: 'fecha',       label: 'Fecha'             },
+  { key: 'carga_t1',   label: 'Carga T1 (L)'       },
+  { key: 'carga_t2',   label: 'Carga T2 (L)'       },
+  { key: 'total_carga',label: 'Total Carga (L)'     },
+  { key: 'real_t1',    label: 'Real T1 (L)'         },
+  { key: 'real_t2',    label: 'Real T2 (L)'         },
+  { key: 'total_real', label: 'Total Real (L)'      },
+  { key: 'dif_litros', label: 'Diferencia Litros'   },
+  { key: 'dif_pct',    label: 'Diferencia %'        },
+  { key: 'pipa',       label: 'Envío Pipa (L)'      },
 ]
 
 export default function ExportarPage() {
@@ -25,7 +25,7 @@ export default function ExportarPage() {
 
   const today = getTodayString()
   const [fechaInicio, setFechaInicio] = useState(today)
-  const [fechaFin, setFechaFin] = useState(today)
+  const [fechaFin,    setFechaFin]    = useState(today)
   const [quincenaSelected, setQuincenaSelected] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -40,19 +40,21 @@ export default function ExportarPage() {
 
   async function handleExport() {
     if (!fechaInicio || !fechaFin) { toast.error('Seleccioná un rango de fechas'); return }
-    if (fechaInicio > fechaFin) { toast.error('La fecha de inicio debe ser anterior al fin'); return }
+    if (fechaInicio > fechaFin)    { toast.error('La fecha inicio debe ser anterior al fin'); return }
 
     setLoading(true)
     try {
-      const res = await apiCall<Record<string, unknown>[]>('exportarDatos', { fechaInicio, fechaFin }, token)
+      const res = await apiCall<Record<string, unknown>[]>(
+        'exportarDatos', { fechaInicio, fechaFin }, token
+      )
       if (!res.success || !res.data) {
         toast.error(res.error ?? 'Error al obtener datos')
         return
       }
-      const csv = buildCSV(res.data, CSV_HEADERS)
-      const filename = `LSA_${fechaInicio}_al_${fechaFin}.csv`
-      downloadCSV(csv, filename)
-      toast.success(`Exportado: ${res.data.length} registros`)
+
+      const filename = `LSA_${fechaInicio}_al_${fechaFin}.xlsx`
+      downloadXLSX(res.data, HEADERS, filename, 'Control LSA')
+      toast.success(`✅ Excel generado: ${res.data.length} registros`)
     } catch {
       toast.error('Error al exportar')
     } finally {
@@ -63,8 +65,8 @@ export default function ExportarPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Exportar datos</h1>
-        <p className="text-sm text-slate-500 mt-1">Descargá los registros en formato CSV para Excel</p>
+        <h1 className="text-2xl font-bold text-slate-800">Exportar a Excel</h1>
+        <p className="text-sm text-slate-500 mt-1">Descargá los registros en formato .xlsx listo para Excel</p>
       </div>
 
       <div className="card space-y-5">
@@ -122,12 +124,12 @@ export default function ExportarPage() {
           </div>
         </div>
 
-        {/* Preview */}
+        {/* Preview campos */}
         {fechaInicio && fechaFin && (
           <div className="bg-slate-50 rounded-lg px-4 py-3 text-sm text-slate-600">
-            <p className="font-medium text-slate-700 mb-1">Campos que se exportarán:</p>
+            <p className="font-medium text-slate-700 mb-1">Columnas que incluirá el Excel:</p>
             <p className="text-xs text-slate-500 leading-relaxed">
-              {CSV_HEADERS.map(h => h.label).join(' · ')}
+              {HEADERS.map(h => h.label).join(' · ')}
             </p>
           </div>
         )}
@@ -138,9 +140,9 @@ export default function ExportarPage() {
           className="btn-primary w-full gap-2 py-3.5 text-base"
         >
           {loading ? (
-            <><Loader2 className="w-4 h-4 animate-spin" />Exportando...</>
+            <><Loader2 className="w-4 h-4 animate-spin" />Generando Excel...</>
           ) : (
-            <><FileSpreadsheet className="w-4 h-4" />Exportar CSV</>
+            <><FileSpreadsheet className="w-4 h-4" />Exportar Excel (.xlsx)</>
           )}
         </button>
       </div>
@@ -150,13 +152,13 @@ export default function ExportarPage() {
         <div className="flex gap-3">
           <Download className="w-4 h-4 text-primary-600 shrink-0 mt-0.5" />
           <div className="text-xs text-primary-700 space-y-1">
-            <p className="font-medium">Cómo abrir el CSV en Excel:</p>
-            <ol className="list-decimal ml-4 space-y-0.5 text-primary-600">
-              <li>Abrí Excel → Datos → Desde texto/CSV</li>
-              <li>Seleccioná el archivo descargado</li>
-              <li>Delimitador: Coma. Codificación: UTF-8</li>
-              <li>Cargar</li>
-            </ol>
+            <p className="font-medium">El archivo .xlsx se abre directo en Excel:</p>
+            <ul className="list-disc ml-4 space-y-0.5 text-primary-600">
+              <li>Doble click en el archivo descargado</li>
+              <li>Los números ya están como valores numéricos</li>
+              <li>Encabezados con color azul LSA</li>
+              <li>Compatible con Excel, Google Sheets y LibreOffice</li>
+            </ul>
           </div>
         </div>
       </div>
