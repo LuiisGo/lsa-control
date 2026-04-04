@@ -7,11 +7,11 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: 'credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
+        username: { label: 'Usuario', type: 'text' },
         password: { label: 'Contraseña', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null
+        if (!credentials?.username || !credentials?.password) return null
 
         const res = await apiCall<{
           token: string
@@ -20,7 +20,8 @@ export const authOptions: NextAuthOptions = {
           email: string
           role: 'admin' | 'empleado'
         }>('login', {
-          email: credentials.email,
+          email: credentials.username,    // el backend recibe el campo como "email"
+          username: credentials.username, // por si el backend acepta "username"
           password: credentials.password,
         })
 

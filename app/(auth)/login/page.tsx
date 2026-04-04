@@ -2,13 +2,14 @@
 import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Eye, EyeOff, Loader2, Droplets, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
 import { isWebAuthnAvailable, webAuthnAuthenticate } from '@/lib/webauthn'
+import { LogoSA } from '@/components/LogoSA'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -22,8 +23,8 @@ export default function LoginPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!email || !password) {
-      setError('Ingresá tu email y contraseña')
+    if (!username || !password) {
+      setError('Ingresá tu usuario y contraseña')
       return
     }
 
@@ -32,15 +33,14 @@ export default function LoginPage() {
 
     try {
       const result = await signIn('credentials', {
-        email,
+        username,
         password,
         redirect: false,
       })
 
       if (result?.error) {
-        setError('Email o contraseña incorrectos')
+        setError('Usuario o contraseña incorrectos')
       } else if (result?.ok) {
-        // Determine role for redirect
         const res = await fetch('/api/auth/session')
         const session = await res.json()
         const role = session?.user?.role
@@ -65,7 +65,7 @@ export default function LoginPage() {
       }
 
       const result = await signIn('credentials', {
-        email: data.email,
+        username: data.email,
         password: `webauthn:${data.token}`,
         redirect: false,
       })
@@ -84,36 +84,44 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur rounded-2xl mb-4 ring-1 ring-white/20">
-            <Droplets className="w-8 h-8 text-white" />
+    <div className="min-h-dvh flex flex-col items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 p-4">
+      <div className="w-full max-w-sm flex flex-col items-center">
+
+        {/* ── Logo del sello ─────────────────────────────── */}
+        <div className="mb-6 flex flex-col items-center gap-3">
+          <LogoSA size={140} variant="dark" />
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-white tracking-wide">Control LSA</h1>
+            <p className="text-primary-300 text-xs mt-0.5 tracking-wider uppercase">
+              Sistema de entradas y salidas
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-white">Control LSA</h1>
-          <p className="text-primary-200 text-sm mt-1">Entradas y salidas de combustible</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl p-6 shadow-modal">
-          <h2 className="text-lg font-semibold text-slate-800 mb-5">Iniciar sesión</h2>
+        {/* ── Card de login ──────────────────────────────── */}
+        <div className="w-full bg-white rounded-2xl p-6 shadow-modal">
+          <h2 className="text-base font-semibold text-slate-700 mb-5 text-center">
+            Iniciar sesión
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Usuario */}
             <div>
-              <label htmlFor="email" className="label">Email</label>
+              <label htmlFor="username" className="label">Usuario</label>
               <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={username}
+                onChange={e => { setUsername(e.target.value); setError('') }}
                 className={`input ${error ? 'input-error' : ''}`}
-                placeholder="admin@lsa.com"
+                placeholder="Ej: AdminLSA"
                 disabled={loading}
               />
             </div>
 
+            {/* Contraseña */}
             <div>
               <label htmlFor="password" className="label">Contraseña</label>
               <div className="relative">
@@ -122,7 +130,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="current-password"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => { setPassword(e.target.value); setError('') }}
                   className={`input pr-12 ${error ? 'input-error' : ''}`}
                   placeholder="••••••••"
                   disabled={loading}
@@ -138,8 +146,9 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 text-danger-600 bg-danger-50 rounded-lg px-3 py-2.5 text-sm">
+              <div className="flex items-center gap-2 text-danger-600 bg-danger-50 border border-danger-100 rounded-lg px-3 py-2.5 text-sm">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -148,25 +157,23 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full text-base py-3"
+              className="btn-primary w-full text-base py-3.5 mt-1"
             >
               {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Ingresando...
-                </>
+                <><Loader2 className="w-4 h-4 animate-spin" />Ingresando...</>
               ) : 'Ingresar'}
             </button>
           </form>
 
+          {/* Biométrico */}
           {webAuthnSupported && (
             <>
               <div className="relative my-4">
                 <div className="absolute inset-0 flex items-center">
                   <div className="w-full border-t border-slate-200" />
                 </div>
-                <div className="relative flex justify-center text-xs text-slate-400 bg-white px-2">
-                  o continuar con
+                <div className="relative flex justify-center">
+                  <span className="bg-white px-3 text-xs text-slate-400">o continuar con</span>
                 </div>
               </div>
 
@@ -179,10 +186,14 @@ export default function LoginPage() {
                 {biometricLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-                    <path d="M12 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
-                    <path d="M12 12c-2.21 0-4 1.79-4 4h8c0-2.21-1.79-4-4-4z"/>
+                  /* Fingerprint icon */
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <path d="M12 10a2 2 0 0 0-2 2v4" />
+                    <path d="M10 10a2 2 0 0 1 4 0c0 4-1 7-2 8" />
+                    <path d="M8.5 8.5A5 5 0 0 1 17 12c0 4.5-1.5 7-3 9" />
+                    <path d="M6 9a7 7 0 0 1 12.22-1" />
+                    <path d="M4.5 10.5A9.5 9.5 0 0 1 21 12c0 5-2 9-4 11" />
+                    <path d="M2 13a12 12 0 0 1 3.5-7.5" />
                   </svg>
                 )}
                 Face ID / Huella digital
@@ -191,9 +202,16 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="text-center text-primary-200 text-xs mt-6">
-          Control LSA &copy; {new Date().getFullYear()}
-        </p>
+        {/* ── Footer POWERED BY FUTURA ───────────────────── */}
+        <div className="mt-8 flex flex-col items-center gap-1">
+          <p className="text-primary-400 text-[10px] uppercase tracking-[3px] font-medium">
+            Powered by
+          </p>
+          <span className="text-white font-bold text-base tracking-[4px] uppercase">
+            FUTURA
+          </span>
+        </div>
+
       </div>
     </div>
   )
