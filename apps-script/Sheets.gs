@@ -1,0 +1,359 @@
+// ============================================================
+// Sheets.gs — CRUD Fase 1 + initSheets Fase 1+2
+// ============================================================
+
+function initSheets() {
+  var ss = SpreadsheetApp.openById('1R6IXVYnA9P30zHUwnHCMbyXCIxR5ReMCgmXcOe1k82c');
+
+  function ensureSheet(name, headers) {
+    var sheet = ss.getSheetByName(name);
+    if (!sheet) {
+      sheet = ss.insertSheet(name);
+      sheet.appendRow(headers);
+      Logger.log('Creada: ' + name);
+    } else {
+      Logger.log('Existe: ' + name);
+    }
+    return sheet;
+  }
+
+  // Fase 1
+  ensureSheet('Cargas',     ['ID','Fecha','Hora','Proveedor','Litros_T1','Litros_T2','Total','Foto_URL']);
+  ensureSheet('Mediciones', ['ID','Fecha','Litros_Real_T1','Litros_Real_T2','Total_Real','Dif_Litros','Dif_Pct','Foto_URL']);
+  ensureSheet('Proveedores',['ID','Nombre','Activo']);
+  ensureSheet('LOG_CAMBIOS',['ID','Fecha','Hora','Usuario','Accion','Hoja','Registro_ID','Anterior','Nuevo']);
+
+  var usuSheet = ss.getSheetByName('Usuarios');
+  if (!usuSheet) {
+    usuSheet = ss.insertSheet('Usuarios');
+    usuSheet.appendRow(['ID','Nombre','Username','Password','Role','Activo','ApiToken']);
+  }
+
+  // Fase 2
+  ensureSheet('COMPRADORES',        ['ID','Nombre','NIT','Activo']);
+  ensureSheet('ENVIOS',             ['ID','Fecha','Comprador_ID','Comprador_Nombre','Litros_Enviados','Monto_Total','Notas','Usuario_ID','Usuario_Nombre','Timestamp']);
+  ensureSheet('PRECIOS_COMPRADOR',  ['ID','Comprador_ID','Fecha','Precio_Litro']);
+  ensureSheet('REMANENTES',         ['ID','Fecha_Origen','Litros_T1','Litros_T2','Total','Usado_Como_Inicial','Fecha_Uso']);
+  ensureSheet('TARIFAS_PROVEEDORES',['ID','Proveedor_ID','Proveedor_Nombre','Precio_Litro','Vigente_Desde','Activo']);
+  ensureSheet('PLANILLAS',          ['ID','Quincena_Inicio','Quincena_Fin','Proveedor_ID','Proveedor_Nombre','Total_Litros','Precio_Litro','Subtotal','IVA','Total_Con_IVA','Estado','Fecha_Generada']);
+  ensureSheet('GASTOS',             ['ID','Fecha','Categoria_ID','Categoria_Nombre','Descripcion','Monto','IVA_Incluido','Usuario_ID','Usuario_Nombre','Comprobante_URL']);
+  ensureSheet('CATEGORIAS_GASTOS',  ['ID','Nombre','Activo']);
+  ensureSheet('ALERTAS_CONFIG',     ['ID','Tipo','Descripcion','Umbral','Emails','Activo']);
+  ensureSheet('ACCESOS_PROVEEDORES',['ID','Proveedor_ID','Proveedor_Nombre','Codigo_Acceso','Link_Token','Activo']);
+
+  // Initial users
+  var uData = usuSheet.getDataRange().getValues();
+  if (uData.length <= 1) {
+    usuSheet.appendRow([generateId(),'Administrador LSA','AdminLSA','Lecheria2026','admin',true,'']);
+    usuSheet.appendRow([generateId(),'Empleado Acopio','Acopio1','LSA2026','empleado',true,'']);
+  }
+
+  // Initial proveedores
+  var provSheet = ss.getSheetByName('Proveedores');
+  if (provSheet.getDataRange().getValues().length <= 1) {
+    provSheet.appendRow([generateId(),'Proveedor Ejemplo 1',true]);
+    provSheet.appendRow([generateId(),'Proveedor Ejemplo 2',true]);
+  }
+
+  // Initial gastos categories
+  var catSheet = ss.getSheetByName('CATEGORIAS_GASTOS');
+  if (catSheet.getDataRange().getValues().length <= 1) {
+    ['Combustible','Mantenimiento','Materiales','Servicios','Otros'].forEach(function(n) {
+      catSheet.appendRow([generateId(), n, true]);
+    });
+  }
+
+  // Default alerts
+  var alertSheet = ss.getSheetByName('ALERTAS_CONFIG');
+  if (alertSheet.getDataRange().getValues().length <= 1) {
+    alertSheet.appendRow([generateId(),'TANQUE_MINIMO','Notificar cuando el total del día baje de X litros',500,'',false]);
+    alertSheet.appendRow([generateId(),'DIFERENCIA_ALTA','Notificar cuando la diferencia carga/regla supere X%',5,'',false]);
+  }
+}
+
+// ── CARGAS ───────────────────────────────────────────────────
+
+function getCargas(body, user) {
+  var fecha  = body.fecha || getToday();
+  var sheet  = getSheet('Cargas');
+  var data   = sheet.getDataRange().getValues();
+  var cargas = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (dateToString(row[1]) === fecha) {
+      cargas.push({
+        id: String(row[0]), fecha: dateToString(row[1]),
+        hora: String(row[2]||''), proveedor: String(row[3]||''),
+        litros_t1: num(row[4]), litros_t2: num(row[5]), total: num(row[6]),
+        foto_url: String(row[7]||''),
+      });
+    }
+  }
+  return { success: true, data: cargas };
+}
+
+function saveCarga(body, user) {
+  var t1 = num(body.litros_t1), t2 = num(body.litros_t2);
+  if (t1 + t2 <= 0) return { success: false, error: 'Total litros debe ser > 0' };
+  var sheet = getSheet('Cargas');
+  var id    = generateId();
+  var fecha = body.fecha || getToday();
+  var hora  = body.hora  || getNow();
+  sheet.appendRow([id, fecha, hora, String(body.proveedor||''), t1, t2, t1+t2, String(body.foto_url||'')]);
+  return { success: true, data: { id: id } };
+}
+
+function editarCarga(body, user) {
+  var sheet = getSheet('Cargas');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) {
+      var t1   = num(body.litros_t1 !== undefined ? body.litros_t1 : data[i][4]);
+      var t2   = num(body.litros_t2 !== undefined ? body.litros_t2 : data[i][5]);
+      var prov = body.proveedor !== undefined ? String(body.proveedor) : String(data[i][3]);
+      sheet.getRange(i+1,4).setValue(prov);
+      sheet.getRange(i+1,5).setValue(t1);
+      sheet.getRange(i+1,6).setValue(t2);
+      sheet.getRange(i+1,7).setValue(t1+t2);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Carga no encontrada' };
+}
+
+function deleteCarga(body, user) {
+  var sheet = getSheet('Cargas');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) { sheet.deleteRow(i+1); return { success: true }; }
+  }
+  return { success: false, error: 'Carga no encontrada' };
+}
+
+function getCargasTotales(fecha) {
+  var sheet = getSheet('Cargas');
+  var data  = sheet.getDataRange().getValues();
+  var total = 0;
+  for (var i = 1; i < data.length; i++) {
+    if (dateToString(data[i][1]) === fecha) total += num(data[i][6]);
+  }
+  return total;
+}
+
+// ── MEDICIONES ───────────────────────────────────────────────
+
+function getMedicion(body, user) {
+  var fecha = body.fecha || getToday();
+  var sheet = getSheet('Mediciones');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (dateToString(row[1]) === fecha) {
+      return { success: true, data: {
+        fecha: dateToString(row[1]),
+        litros_real_t1: num(row[2]), litros_real_t2: num(row[3]),
+        total_real: num(row[4]), diferencia_litros: num(row[5]),
+        diferencia_pct: num(row[6]), foto_url: String(row[7]||''),
+      }};
+    }
+  }
+  return { success: true, data: null };
+}
+
+function saveMedicion(body, user) {
+  var fecha    = getToday();
+  var existing = getMedicion({ fecha: fecha }, user);
+  if (existing.data) return editarMedicion(Object.assign({}, body, { fecha: fecha }), user);
+  var sheet    = getSheet('Mediciones');
+  var id       = generateId();
+  var t1       = num(body.litros_real_t1), t2 = num(body.litros_real_t2);
+  var total    = t1 + t2;
+  var cargasH  = getCargasTotales(fecha);
+  var dif      = total - cargasH;
+  var difPct   = cargasH > 0 ? (dif / cargasH * 100) : 0;
+  sheet.appendRow([id, fecha, t1, t2, total, Math.round(dif*100)/100, Math.round(difPct*100)/100, String(body.foto_url||'')]);
+  try { verificarAlertaDiferencia(cargasH, total); } catch(e) {}
+  return { success: true, data: { id: id } };
+}
+
+function editarMedicion(body, user) {
+  var fecha = body.fecha || getToday();
+  var sheet = getSheet('Mediciones');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (dateToString(data[i][1]) === fecha) {
+      var t1     = num(body.litros_real_t1 !== undefined ? body.litros_real_t1 : data[i][2]);
+      var t2     = num(body.litros_real_t2 !== undefined ? body.litros_real_t2 : data[i][3]);
+      var total  = t1 + t2;
+      var cargasT= getCargasTotales(fecha);
+      var dif    = total - cargasT;
+      var difPct = cargasT > 0 ? (dif / cargasT * 100) : 0;
+      sheet.getRange(i+1,3).setValue(t1); sheet.getRange(i+1,4).setValue(t2);
+      sheet.getRange(i+1,5).setValue(total);
+      sheet.getRange(i+1,6).setValue(Math.round(dif*100)/100);
+      sheet.getRange(i+1,7).setValue(Math.round(difPct*100)/100);
+      if (body.foto_url) sheet.getRange(i+1,8).setValue(String(body.foto_url));
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Medicion no encontrada' };
+}
+
+function deleteMedicion(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var fecha = String(body.fecha || getToday());
+  var sheet = getSheet('Mediciones');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (dateToString(data[i][1]) === fecha) { sheet.deleteRow(i+1); return { success: true }; }
+  }
+  return { success: false, error: 'Medicion no encontrada' };
+}
+
+// ── PROVEEDORES ──────────────────────────────────────────────
+
+function getProveedores(user) {
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  var lista = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    lista.push({ id: String(row[0]), nombre: String(row[1]||''), activo: row[2] !== false && row[2] !== 'false' && row[2] !== 0 });
+  }
+  return { success: true, data: lista };
+}
+
+function saveProveedor(body, user) {
+  var nombre = String(body.nombre||'').trim();
+  if (!nombre) return { success: false, error: 'Nombre requerido' };
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]).toLowerCase() === nombre.toLowerCase()) return { success: false, error: 'Proveedor ya existe' };
+  }
+  var id = generateId();
+  sheet.appendRow([id, nombre, true]);
+  return { success: true, data: { id: id, nombre: nombre, activo: true } };
+}
+
+function toggleProveedor(body, user) {
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) {
+      var cur = data[i][2];
+      sheet.getRange(i+1,3).setValue(!(cur !== false && cur !== 'false' && cur !== 0));
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Proveedor no encontrado' };
+}
+
+function deleteProveedor(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) { sheet.deleteRow(i+1); return { success: true }; }
+  }
+  return { success: false, error: 'Proveedor no encontrado' };
+}
+
+// ── USUARIOS ─────────────────────────────────────────────────
+
+function getUsuarios(user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var sheet = getSheet('Usuarios');
+  var data  = sheet.getDataRange().getValues();
+  var lista = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    if (!row[0]) continue;
+    lista.push({ id: String(row[0]), nombre: String(row[1]||''), username: String(row[2]||''), role: String(row[4]||'empleado'), activo: row[5] !== false && row[5] !== 'false' && row[5] !== 0 });
+  }
+  return { success: true, data: lista };
+}
+
+function saveUsuario(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var sheet    = getSheet('Usuarios');
+  var data     = sheet.getDataRange().getValues();
+  var username = String(body.username||'').trim();
+  var password = String(body.password||'').trim();
+  var nombre   = String(body.nombre||username).trim();
+  var role     = String(body.role||'empleado').trim();
+  if (!username || !password) return { success: false, error: 'Usuario y contraseña requeridos' };
+  if (body.id) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(body.id)) {
+        sheet.getRange(i+1,2).setValue(nombre);
+        sheet.getRange(i+1,3).setValue(username);
+        if (password) sheet.getRange(i+1,4).setValue(password);
+        sheet.getRange(i+1,5).setValue(role);
+        return { success: true };
+      }
+    }
+  }
+  for (var j = 1; j < data.length; j++) {
+    if (String(data[j][2]).toLowerCase() === username.toLowerCase()) return { success: false, error: 'Usuario ya existe' };
+  }
+  var id = generateId();
+  sheet.appendRow([id, nombre, username, password, role, true, '']);
+  return { success: true, data: { id: id } };
+}
+
+function toggleUsuario(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var sheet = getSheet('Usuarios');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) {
+      if (String(data[i][2]) === user.username) return { success: false, error: 'No puedes desactivar tu propio usuario' };
+      var cur = data[i][5];
+      sheet.getRange(i+1,6).setValue(!(cur !== false && cur !== 'false' && cur !== 0));
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Usuario no encontrado' };
+}
+
+function deleteUsuario(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var sheet = getSheet('Usuarios');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(body.id)) {
+      if (String(data[i][2]) === user.username) return { success: false, error: 'No puedes eliminar tu propio usuario' };
+      sheet.deleteRow(i+1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Usuario no encontrado' };
+}
+
+// ── CARGAS POR PROVEEDOR ──────────────────────────────────────
+
+function getCargasPorProveedor(body, user) {
+  var inicio = String(body.fechaInicio||''), fin = String(body.fechaFin||'');
+  if (!inicio || !fin) return { success: false, error: 'Rango de fechas requerido' };
+  var sheet  = getSheet('Cargas');
+  var data   = sheet.getDataRange().getValues();
+  var byProv = {};
+  for (var i = 1; i < data.length; i++) {
+    var f = dateToString(data[i][1]);
+    if (f >= inicio && f <= fin) {
+      var prov = String(data[i][3]||'Sin proveedor');
+      if (!byProv[prov]) byProv[prov] = { proveedor: prov, t1: 0, t2: 0, total: 0 };
+      byProv[prov].t1    += num(data[i][4]);
+      byProv[prov].t2    += num(data[i][5]);
+      byProv[prov].total += num(data[i][6]);
+    }
+  }
+  var result = Object.keys(byProv).map(function(k) {
+    var p = byProv[k];
+    return { proveedor: p.proveedor, t1: Math.round(p.t1*10)/10, t2: Math.round(p.t2*10)/10, total: Math.round(p.total*10)/10 };
+  });
+  result.sort(function(a,b){ return b.total - a.total; });
+  return { success: true, data: result };
+}

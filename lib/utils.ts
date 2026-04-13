@@ -5,6 +5,11 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export function formatQ(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return 'Q ' + new Intl.NumberFormat('es-GT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+}
+
 export function formatLitros(value: number | null | undefined): string {
   if (value == null) return '—'
   return new Intl.NumberFormat('es-GT', {

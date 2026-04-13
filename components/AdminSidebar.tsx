@@ -2,7 +2,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from 'next-auth/react'
-import { LayoutDashboard, FileText, Truck, Users, Download, LogOut, User } from 'lucide-react'
+import {
+  LayoutDashboard, FileText, Truck, Users, Download, LogOut, User,
+  BarChart3, ShoppingBag, ArrowUpRight, FileSpreadsheet, Tag, Receipt,
+  BarChart2, Bell, Globe,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -10,13 +14,39 @@ interface Props {
   userEmail: string
 }
 
-const navItems = [
-  { href: '/admin',              label: 'Dashboard',   icon: LayoutDashboard, exact: true },
-  { href: '/admin/registros',    label: 'Registros',   icon: FileText },
-  { href: '/admin/proveedores',  label: 'Proveedores', icon: Truck },
-  { href: '/admin/usuarios',     label: 'Usuarios',    icon: Users },
-  { href: '/admin/exportar',     label: 'Exportar',    icon: Download },
+const sections = [
+  {
+    label: 'Operaciones',
+    items: [
+      { href: '/admin',             label: 'Dashboard',   icon: LayoutDashboard, exact: true },
+      { href: '/admin/registros',   label: 'Registros',   icon: FileText },
+      { href: '/admin/proveedores', label: 'Proveedores', icon: Truck },
+      { href: '/admin/usuarios',    label: 'Usuarios',    icon: Users },
+      { href: '/admin/exportar',    label: 'Exportar',    icon: Download },
+    ],
+  },
+  {
+    label: 'Finanzas',
+    items: [
+      { href: '/admin/finanzas',                 label: 'Dashboard Finanzas', icon: BarChart3 },
+      { href: '/admin/compradores',              label: 'Compradores',        icon: ShoppingBag },
+      { href: '/admin/envios',                   label: 'Envíos',             icon: ArrowUpRight },
+      { href: '/admin/planillas',                label: 'Planillas',          icon: FileSpreadsheet },
+      { href: '/admin/tarifas',                  label: 'Tarifas',            icon: Tag },
+      { href: '/admin/gastos',                   label: 'Gastos',             icon: Receipt },
+      { href: '/admin/comparativa-proveedores',  label: 'Comparativa',        icon: BarChart2 },
+    ],
+  },
+  {
+    label: 'Configuración',
+    items: [
+      { href: '/admin/alertas',           label: 'Alertas',           icon: Bell },
+      { href: '/admin/portal-proveedores',label: 'Portal Proveedores', icon: Globe },
+    ],
+  },
 ]
+
+const allItems = sections.flatMap(s => s.items)
 
 export function AdminSidebar({ userName, userEmail }: Props) {
   const pathname = usePathname()
@@ -44,9 +74,9 @@ export function AdminSidebar({ userName, userEmail }: Props) {
         </button>
       </header>
 
-      {/* ── Mobile: navegación inferior ─────────────────── */}
+      {/* ── Mobile: navegación inferior (primeras 5 items de Operaciones) ── */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 flex">
-        {navItems.map(item => {
+        {allItems.slice(0, 5).map(item => {
           const active = isActive(item.href, item.exact)
           return (
             <Link
@@ -58,7 +88,7 @@ export function AdminSidebar({ userName, userEmail }: Props) {
               )}
             >
               <item.icon className="w-5 h-5" />
-              <span className="text-[10px]">{item.label}</span>
+              <span className="text-[10px]">{item.label.split(' ')[0]}</span>
             </Link>
           )
         })}
@@ -67,7 +97,6 @@ export function AdminSidebar({ userName, userEmail }: Props) {
       {/* ── Desktop: sidebar fijo ───────────────────────── */}
       <aside className="hidden lg:flex flex-col fixed left-0 top-0 bottom-0 w-64 bg-primary-800 text-white z-30">
 
-        {/* Logo grande en sidebar */}
         <div className="px-5 pt-6 pb-4 border-b border-white/10 flex flex-col items-center gap-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/LSA-Logo.png" alt="Logo Grupo Lechero San Antonio" width={100} height={100} className="rounded-full object-contain" />
@@ -79,29 +108,34 @@ export function AdminSidebar({ userName, userEmail }: Props) {
           <p className="text-[10px] text-primary-400 uppercase tracking-[2px]">Panel de administración</p>
         </div>
 
-        {/* Links de navegación */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map(item => {
-            const active = isActive(item.href, item.exact)
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150',
-                  active
-                    ? 'bg-white/15 text-white'
-                    : 'text-primary-200 hover:bg-white/10 hover:text-white'
-                )}
-              >
-                <item.icon className="w-4 h-4 shrink-0" />
-                {item.label}
-              </Link>
-            )
-          })}
+        <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+          {sections.map(section => (
+            <div key={section.label}>
+              <p className="text-[10px] font-semibold text-primary-500 uppercase tracking-[2px] px-3 mb-1">{section.label}</p>
+              <div className="space-y-0.5">
+                {section.items.map(item => {
+                  const active = isActive(item.href, item.exact)
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                        active
+                          ? 'bg-white/15 text-white'
+                          : 'text-primary-200 hover:bg-white/10 hover:text-white'
+                      )}
+                    >
+                      <item.icon className="w-4 h-4 shrink-0" />
+                      {item.label}
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
-        {/* Usuario + logout */}
         <div className="p-3 border-t border-white/10">
           <div className="flex items-center gap-3 px-3 py-2.5 mb-1">
             <div className="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center shrink-0">
@@ -119,8 +153,6 @@ export function AdminSidebar({ userName, userEmail }: Props) {
             <LogOut className="w-4 h-4" />
             Cerrar sesión
           </button>
-
-          {/* POWERED BY FUTURA */}
           <div className="mt-4 pt-3 border-t border-white/10 text-center">
             <p className="text-[9px] text-primary-500 uppercase tracking-[2px]">Powered by</p>
             <p className="text-[11px] text-primary-300 font-bold tracking-[3px] uppercase mt-0.5">FUTURA</p>

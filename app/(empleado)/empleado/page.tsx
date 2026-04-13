@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { Droplets, Plus, ClipboardCheck, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { Droplets, Plus, ClipboardCheck, CheckCircle2, XCircle, RefreshCw, ArrowUpRight, Archive, Receipt } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { TarjetaMetrica } from '@/components/TarjetaMetrica'
 import { TablaCargas, type Carga } from '@/components/TablaCargas'
@@ -141,6 +141,18 @@ export default function EmpleadoHomePage() {
             Registrar Medición
           </Link>
         )}
+        <Link href="/empleado/envio" className="fab-btn flex items-center gap-2 bg-warning-600 hover:bg-warning-700">
+          <ArrowUpRight className="w-4 h-4" />
+          Registrar Envío
+        </Link>
+        <Link href="/empleado/remanente" className="fab-btn flex items-center gap-2 bg-slate-600 hover:bg-slate-700">
+          <Archive className="w-4 h-4" />
+          Remanente
+        </Link>
+        <Link href="/empleado/gasto" className="fab-btn flex items-center gap-2 bg-danger-600 hover:bg-danger-700">
+          <Receipt className="w-4 h-4" />
+          Registrar Gasto
+        </Link>
         <Link href="/empleado/nueva-carga" className="fab-btn flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Nueva Carga
