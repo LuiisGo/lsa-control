@@ -25,6 +25,9 @@ function handleLogin(body) {
       var token = generateToken();
       sheet.getRange(i + 1, 7).setValue(token);
 
+      var rawPermisos = row[9] !== undefined ? row[9] : '';
+      var permisos    = _parsePermisos(rawPermisos);
+
       return {
         success: true,
         data: {
@@ -33,6 +36,7 @@ function handleLogin(body) {
           nombre: String(row[1]),
           email:  rowUser,   // kept for next-auth compatibility
           role:   String(row[4] || 'empleado'),
+          permisos: permisos,
         }
       };
     }
@@ -55,11 +59,13 @@ function validateToken(token) {
     var activo = row[5];
 
     if (stored && stored === t && activo !== false && activo !== 'false' && activo !== 0) {
+      var rawPermisos = row[9] !== undefined ? row[9] : '';
       return {
         id:       String(row[0]),
         nombre:   String(row[1]),
         username: String(row[2]),
         role:     String(row[4] || 'empleado'),
+        permisos: _parsePermisos(rawPermisos),
       };
     }
   }
@@ -137,4 +143,26 @@ function saveWebAuthnCredential(body) {
     }
   }
   return { success: false, error: 'Usuario no encontrado' };
+}
+
+// ── PATCH: PERMISOS ───────────────────────────────────────────
+
+var TODOS_PERMISOS = ['cargas', 'medicion', 'envios', 'gastos', 'remanentes'];
+
+function tienePermiso(session, permiso) {
+  if (!session) return false;
+  if (session.role === 'admin') return true;
+  var permisos = session.permisos || TODOS_PERMISOS;
+  return permisos.indexOf(permiso) !== -1;
+}
+
+function _parsePermisos(rawValue) {
+  if (!rawValue || rawValue === '') return TODOS_PERMISOS;
+  try {
+    var parsed = JSON.parse(String(rawValue));
+    if (Array.isArray(parsed)) return parsed;
+    return TODOS_PERMISOS;
+  } catch(e) {
+    return TODOS_PERMISOS;
+  }
 }
