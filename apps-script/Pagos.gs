@@ -76,8 +76,9 @@ function calcularPeriodoProveedor(proveedorId) {
   }
 
   // Weekly: cut day is FIRST day of period
-  var hoy    = new Date();
-  var hoyTZ  = new Date(hoy.toLocaleString('en-US', { timeZone: 'America/Guatemala' }));
+  // Use Utilities.formatDate for reliable GAS timezone handling (Guatemala = UTC-6, no DST)
+  var hoyStr = Utilities.formatDate(new Date(), 'America/Guatemala', 'yyyy-MM-dd HH:mm:ss');
+  var hoyTZ  = new Date(hoyStr);
   // getDay(): 0=Sun,1=Mon...6=Sat -> map Sun to 7
   var hoyDow = hoyTZ.getDay() === 0 ? 7 : hoyTZ.getDay();
   var daysFromCut = (hoyDow - diaCorte + 7) % 7;
