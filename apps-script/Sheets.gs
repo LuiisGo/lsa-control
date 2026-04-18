@@ -219,7 +219,14 @@ function getProveedores(user) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
-    lista.push({ id: String(row[0]), nombre: String(row[1]||''), activo: row[2] !== false && row[2] !== 'false' && row[2] !== 0 });
+    lista.push({
+      id:            String(row[0]),
+      nombre:        String(row[1]||''),
+      activo:        row[2] !== false && row[2] !== 'false' && row[2] !== 0,
+      aplicaIVA:     row[3] === true  || row[3] === 'true'  || row[3] === 1,
+      frecuenciaPago:String(row[4] || 'quincenal'),
+      diaCorte:      row[5] ? Number(row[5]) : 1,
+    });
   }
   return { success: true, data: lista };
 }
@@ -227,14 +234,17 @@ function getProveedores(user) {
 function saveProveedor(body, user) {
   var nombre = String(body.nombre||'').trim();
   if (!nombre) return { success: false, error: 'Nombre requerido' };
+  var aplicaIVA  = body.aplicaIVA === true || body.aplicaIVA === 'true' || body.aplicaIVA === 1;
+  var frecuencia = String(body.frecuenciaPago || 'quincenal');
+  var diaCorte   = body.diaCorte ? Number(body.diaCorte) : 1;
   var sheet = getSheet('Proveedores');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][1]).toLowerCase() === nombre.toLowerCase()) return { success: false, error: 'Proveedor ya existe' };
   }
   var id = generateId();
-  sheet.appendRow([id, nombre, true]);
-  return { success: true, data: { id: id, nombre: nombre, activo: true } };
+  sheet.appendRow([id, nombre, true, aplicaIVA, frecuencia, diaCorte]);
+  return { success: true, data: { id: id, nombre: nombre, activo: true, aplicaIVA: aplicaIVA, frecuenciaPago: frecuencia, diaCorte: diaCorte } };
 }
 
 function toggleProveedor(body, user) {
@@ -356,4 +366,31 @@ function getCargasPorProveedor(body, user) {
   });
   result.sort(function(a,b){ return b.total - a.total; });
   return { success: true, data: result };
+}
+
+// ── PATCH: MIGRACIÓN DE COLUMNAS ──────────────────────────────
+
+function addColIfMissing(sheetName, colName) {
+  var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) { Logger.log('Hoja no encontrada: ' + sheetName); return; }
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim() === colName) {
+      Logger.log('Columna ya existe: ' + sheetName + '.' + colName);
+      return;
+    }
+  }
+  var nextCol = sheet.getLastColumn() + 1;
+  sheet.getRange(1, nextCol).setValue(colName);
+  Logger.log('Columna agregada: ' + sheetName + '.' + colName + ' en col ' + nextCol);
+}
+
+function migrateSheets() {
+  addColIfMissing('Proveedores', 'Aplica_IVA');
+  addColIfMissing('Proveedores', 'Frecuencia_Pago');
+  addColIfMissing('Proveedores', 'Dia_Corte_Semanal');
+  addColIfMissing('Usuarios',    'Permisos');
+  addColIfMissing('PLANILLAS',   'IVA_Aplicado');
+  Logger.log('Migración completa.');
 }
