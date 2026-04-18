@@ -284,13 +284,12 @@ function getResumenFinancieroDia(body, user) {
   var restoEstimado   = Math.round((litrosRecepcionados - litrosEnviadosTotal) * 10) / 10;
 
   return { success: true, data: {
-    fecha:          fecha,
-    ingresos:       Math.round(ingresos*100)/100,
-    litrosEnviados: Math.round(litrosEnviados*10)/10,
-    litrosRecibidos:Math.round(litrosRecibidos*10)/10,
-    gastos:         Math.round(totalGastos*100)/100,
-    margen:         Math.round((ingresos-totalGastos)*100)/100,
-    enviosCount:    envios.length,
+    fecha:               fecha,
+    ingresos:            Math.round(ingresos*100)/100,
+    litrosRecibidos:     Math.round(litrosRecibidos*10)/10,
+    gastos:              Math.round(totalGastos*100)/100,
+    margen:              Math.round((ingresos-totalGastos)*100)/100,
+    enviosCount:         envios.length,
     litrosRecepcionados: litrosRecepcionados,
     litrosEnviados:      litrosEnviadosTotal,
     restoEstimado:       restoEstimado,
