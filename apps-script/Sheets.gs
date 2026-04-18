@@ -225,7 +225,7 @@ function getProveedores(user) {
       activo:        row[2] !== false && row[2] !== 'false' && row[2] !== 0,
       aplicaIVA:     row[3] === true  || row[3] === 'true'  || row[3] === 1,
       frecuenciaPago:String(row[4] || 'quincenal'),
-      diaCorte:      row[5] ? Number(row[5]) : 1,
+      diaCorte:      (row[5] != null && row[5] !== '') ? Number(row[5]) : 1,
     });
   }
   return { success: true, data: lista };
@@ -236,7 +236,7 @@ function saveProveedor(body, user) {
   if (!nombre) return { success: false, error: 'Nombre requerido' };
   var aplicaIVA  = body.aplicaIVA === true || body.aplicaIVA === 'true' || body.aplicaIVA === 1;
   var frecuencia = String(body.frecuenciaPago || 'quincenal');
-  var diaCorte   = body.diaCorte ? Number(body.diaCorte) : 1;
+  var diaCorte   = (body.diaCorte != null && body.diaCorte !== '') ? Number(body.diaCorte) : 1;
   var sheet = getSheet('Proveedores');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -374,7 +374,13 @@ function addColIfMissing(sheetName, colName) {
   var ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) { Logger.log('Hoja no encontrada: ' + sheetName); return; }
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) {
+    sheet.getRange(1, 1).setValue(colName);
+    Logger.log('Columna agregada (hoja vacía): ' + sheetName + '.' + colName);
+    return;
+  }
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
   for (var i = 0; i < headers.length; i++) {
     if (String(headers[i]).trim() === colName) {
       Logger.log('Columna ya existe: ' + sheetName + '.' + colName);
