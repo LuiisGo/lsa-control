@@ -85,22 +85,57 @@ function getPreciosHistorial(body, user) {
 // ── ENVÍOS ───────────────────────────────────────────────────
 
 function saveEnvio(body, user) {
+  if (!tienePermiso(user, 'envios')) return { success: false, error: 'Sin permiso para registrar envíos' };
+
   var litros = num(body.litrosEnviados || body.litros_enviados);
-  var monto  = num(body.montoTotal     || body.monto_total);
   if (litros <= 0) return { success: false, error: 'Litros debe ser > 0' };
-  if (monto  <= 0) return { success: false, error: 'Monto debe ser > 0' };
-  var id = generateId();
+
+  // monto is now optional
+  var monto = body.montoTotal !== undefined ? num(body.montoTotal) : '';
+
+  var id    = generateId();
   var fecha = getFechaHoy();
+
   getSheet('ENVIOS').appendRow([
     id, fecha,
     String(body.compradorId || body.comprador_id || ''),
     String(body.compradorNombre || body.comprador_nombre || ''),
-    litros, monto,
-    String(body.notas||''),
+    litros,
+    monto === '' ? '' : monto,
+    String(body.notas || ''),
     user.id, user.nombre, new Date().toISOString()
   ]);
+
   try { verificarAlertasTanque(); } catch(e) {}
-  return { success: true, data: { id: id } };
+
+  // Calculate resto
+  var cargasSheet  = getSheet('Cargas');
+  var cargasData   = cargasSheet.getDataRange().getValues();
+  var totalCargaDia = 0;
+  for (var i = 1; i < cargasData.length; i++) {
+    if (dateToString(cargasData[i][1]) === fecha) {
+      totalCargaDia += num(cargasData[i][6]);
+    }
+  }
+
+  var enviosSheet   = getSheet('ENVIOS');
+  var enviosData    = enviosSheet.getDataRange().getValues();
+  var totalEnviadoDia = 0;
+  for (var j = 1; j < enviosData.length; j++) {
+    if (dateToString(enviosData[j][1]) === fecha) {
+      totalEnviadoDia += num(enviosData[j][4]);
+    }
+  }
+
+  totalCargaDia    = Math.round(totalCargaDia   * 10) / 10;
+  totalEnviadoDia  = Math.round(totalEnviadoDia * 10) / 10;
+  var resto        = Math.round((totalCargaDia - totalEnviadoDia) * 10) / 10;
+
+  var result = { success: true, data: { id: id, totalCargaDia: totalCargaDia, totalEnviadoDia: totalEnviadoDia, resto: resto } };
+  if (totalEnviadoDia > totalCargaDia) {
+    result.data.advertencia = 'Total enviado supera la recepción del día';
+  }
+  return result;
 }
 
 function getEnviosPorFecha(body, user) {
@@ -160,6 +195,7 @@ function _envioObj(row) {
 // ── REMANENTES ───────────────────────────────────────────────
 
 function saveRemanente(body, user) {
+  if (!tienePermiso(user, 'remanentes')) return { success: false, error: 'Sin permiso para registrar remanentes' };
   var t1 = num(body.litrosT1||body.litros_t1), t2 = num(body.litrosT2||body.litros_t2);
   if (t1 + t2 <= 0) return { success: false, error: 'Total remanente debe ser > 0' };
   var id = generateId();
@@ -224,6 +260,29 @@ function getResumenFinancieroDia(body, user) {
   var litrosRecibidos = cargas.reduce(function(s,c){ return s + c.total; }, 0);
   var totalGastos     = gastosR.reduce(function(s,g){ return s + g.monto; }, 0);
 
+  // Litros from sheets for the "HOY" cards (resto calculation)
+  var hoyF = fecha; // fecha was already set above
+  var cargasSheet2 = getSheet('Cargas');
+  var cargasData2  = cargasSheet2.getDataRange().getValues();
+  var litrosRecepcionados = 0;
+  for (var ci = 1; ci < cargasData2.length; ci++) {
+    if (dateToString(cargasData2[ci][1]) === hoyF) {
+      litrosRecepcionados += num(cargasData2[ci][6]);
+    }
+  }
+
+  var enviosSheet2 = getSheet('ENVIOS');
+  var enviosData2  = enviosSheet2.getDataRange().getValues();
+  var litrosEnviadosTotal = 0;
+  for (var ei = 1; ei < enviosData2.length; ei++) {
+    if (dateToString(enviosData2[ei][1]) === hoyF) {
+      litrosEnviadosTotal += num(enviosData2[ei][4]);
+    }
+  }
+  litrosRecepcionados = Math.round(litrosRecepcionados * 10) / 10;
+  litrosEnviadosTotal = Math.round(litrosEnviadosTotal * 10) / 10;
+  var restoEstimado   = Math.round((litrosRecepcionados - litrosEnviadosTotal) * 10) / 10;
+
   return { success: true, data: {
     fecha:          fecha,
     ingresos:       Math.round(ingresos*100)/100,
@@ -232,6 +291,9 @@ function getResumenFinancieroDia(body, user) {
     gastos:         Math.round(totalGastos*100)/100,
     margen:         Math.round((ingresos-totalGastos)*100)/100,
     enviosCount:    envios.length,
+    litrosRecepcionados: litrosRecepcionados,
+    litrosEnviados:      litrosEnviadosTotal,
+    restoEstimado:       restoEstimado,
   }};
 }
 

@@ -49,6 +49,7 @@ function toggleCategoria(body, user) {
 //       5=Monto 6=IVA_Incluido 7=Usuario_ID 8=Usuario_Nombre 9=Comprobante_URL
 
 function saveGasto(body, user) {
+  if (!tienePermiso(user, 'gastos')) return { success: false, error: 'Sin permiso para registrar gastos' };
   var monto = num(body.monto || body.Monto);
   if (monto <= 0) return { success: false, error: 'Monto debe ser > 0' };
 

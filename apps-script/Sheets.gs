@@ -93,6 +93,7 @@ function getCargas(body, user) {
 }
 
 function saveCarga(body, user) {
+  if (!tienePermiso(user, 'cargas')) return { success: false, error: 'Sin permiso para registrar cargas' };
   var t1 = num(body.litros_t1), t2 = num(body.litros_t2);
   if (t1 + t2 <= 0) return { success: false, error: 'Total litros debe ser > 0' };
   var sheet = getSheet('Cargas');
@@ -161,6 +162,7 @@ function getMedicion(body, user) {
 }
 
 function saveMedicion(body, user) {
+  if (!tienePermiso(user, 'medicion')) return { success: false, error: 'Sin permiso para registrar mediciones' };
   var fecha    = getToday();
   var existing = getMedicion({ fecha: fecha }, user);
   if (existing.data) return editarMedicion(Object.assign({}, body, { fecha: fecha }), user);
