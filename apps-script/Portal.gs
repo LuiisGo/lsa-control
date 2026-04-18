@@ -83,7 +83,7 @@ function loginPortalProveedor(body) {
 }
 
 function getPortalProveedor(body) {
-  // Verify access first
+  // Verify access
   var loginRes = loginPortalProveedor(body);
   if (!loginRes.success) return loginRes;
 
@@ -91,100 +91,168 @@ function getPortalProveedor(body) {
   var proveedorNombre = loginRes.data.proveedorNombre;
   var hoy             = getFechaHoy();
 
-  // Last 7 days of cargas for this proveedor
-  var hace7 = new Date(hoy + 'T12:00:00');
-  hace7.setDate(hace7.getDate() - 6);
-  var hace7Str = dateToString(hace7);
-
-  var cargasSheet = getSheet('Cargas');
-  var cargasData  = cargasSheet.getDataRange().getValues();
-  var ultimas7    = [];
-  for (var i = 1; i < cargasData.length; i++) {
-    var f    = dateToString(cargasData[i][1]);
-    var prov = String(cargasData[i][3]||'');
-    if (f >= hace7Str && f <= hoy && prov === proveedorNombre) {
-      ultimas7.push({
-        fecha:    f,
-        hora:     String(cargasData[i][2]||''),
-        litrosT1: num(cargasData[i][4]),
-        litrosT2: num(cargasData[i][5]),
-        total:    num(cargasData[i][6]),
-      });
+  // Read proveedor frecuencia (col 4 = Frecuencia_Pago)
+  var provSheet = getSheet('Proveedores');
+  var provData  = provSheet.getDataRange().getValues();
+  var frecuenciaPago = 'quincenal';
+  for (var pi = 1; pi < provData.length; pi++) {
+    if (String(provData[pi][0]) === proveedorId) {
+      frecuenciaPago = String(provData[pi][4] || 'quincenal');
+      break;
     }
   }
 
-  // Current quincena
-  var qActual   = calcularQuincena(null);
-  var qAnterior = calcularQuincenaAnterior(null);
+  // Cargas sheet (reused in multiple inner loops)
+  var cargasSheet = getSheet('Cargas');
+  var cargasData  = cargasSheet.getDataRange().getValues();
 
-  function _resumenQuincena(q) {
-    var totalLitros = 0;
-    for (var i = 1; i < cargasData.length; i++) {
-      var f    = dateToString(cargasData[i][1]);
-      var prov = String(cargasData[i][3]||'');
-      if (f >= q.inicio && f <= q.fin && prov === proveedorNombre) {
-        totalLitros += num(cargasData[i][6]);
+  // ── HOY ──────────────────────────────────────────────────────
+  var cargasHoy = [];
+  var totalHoy  = 0;
+  for (var i = 1; i < cargasData.length; i++) {
+    var rowF = dateToString(cargasData[i][1]);
+    var rowP = String(cargasData[i][3] || '');
+    if (rowF === hoy && rowP === proveedorNombre) {
+      var t = num(cargasData[i][6]);
+      cargasHoy.push({
+        hora:     String(cargasData[i][2] || ''),
+        litrosT1: num(cargasData[i][4]),
+        litrosT2: num(cargasData[i][5]),
+        total:    t,
+      });
+      totalHoy += t;
+    }
+  }
+
+  // ── PERÍODOS ACTUAL Y ANTERIOR ─────────────────────────────────
+  var periodoActual = calcularPeriodoProveedor(proveedorId);
+  // For previous period: subtract 1 day from inicio to land inside the previous period
+  var dInicio = new Date(periodoActual.inicio + 'T12:00:00');
+  dInicio.setDate(dInicio.getDate() - 1);
+  var periodoAnterior = _calcularPeriodoAnteriorProveedor(proveedorId, dInicio);
+
+  function _resumenPeriodo(periodo) {
+    var byDay = {};
+    var total = 0;
+    for (var ci = 1; ci < cargasData.length; ci++) {
+      var f = dateToString(cargasData[ci][1]);
+      var p = String(cargasData[ci][3] || '');
+      if (f >= periodo.inicio && f <= periodo.fin && p === proveedorNombre) {
+        var lit = num(cargasData[ci][6]);
+        byDay[f] = (byDay[f] || 0) + lit;
+        total   += lit;
       }
     }
+    var dias = Object.keys(byDay).sort();
+    var acumulado = 0;
+    var cargasDia = dias.map(function(d) {
+      acumulado += byDay[d];
+      return { fecha: d, totalLitros: Math.round(byDay[d]*10)/10, acumulado: Math.round(acumulado*10)/10 };
+    });
 
-    // Find planilla if exists
     var planSheet = getSheet('PLANILLAS');
     var planData  = planSheet.getDataRange().getValues();
     var planilla  = null;
     for (var j = 1; j < planData.length; j++) {
       if (String(planData[j][3]) === proveedorId &&
-          String(planData[j][1]) === q.inicio &&
-          String(planData[j][2]) === q.fin) {
+          String(planData[j][1]) === periodo.inicio &&
+          String(planData[j][2]) === periodo.fin) {
         planilla = {
-          totalLitros: num(planData[j][5]),
+          litros:      num(planData[j][5]),
           precioLitro: num(planData[j][6]),
           subtotal:    num(planData[j][7]),
           iva:         num(planData[j][8]),
-          totalConIVA: num(planData[j][9]),
-          estado:      String(planData[j][10]||'GENERADA'),
+          totalConIva: num(planData[j][9]),
+          estado:      String(planData[j][10] || 'GENERADA'),
+          aplicaIva:   planData[j][12] === true || planData[j][12] === 'true' || planData[j][12] === 1,
         };
         break;
       }
     }
 
     return {
-      inicio:      q.inicio,
-      fin:         q.fin,
-      totalLitros: Math.round(totalLitros * 10) / 10,
+      tipo:        periodo.tipo,
+      inicio:      periodo.inicio,
+      fin:         periodo.fin,
+      cargas:      cargasDia,
+      totalLitros: Math.round(total * 10) / 10,
       planilla:    planilla,
     };
   }
 
-  // Last 12 planillas
-  var planSheet = getSheet('PLANILLAS');
-  var planData  = planSheet.getDataRange().getValues();
-  var historial = [];
-  for (var j = 1; j < planData.length; j++) {
-    if (String(planData[j][3]) === proveedorId) {
+  // ── HISTORIAL (last 10 planillas) ────────────────────────────
+  var planSheet2 = getSheet('PLANILLAS');
+  var planData2  = planSheet2.getDataRange().getValues();
+  var historial  = [];
+  for (var h = 1; h < planData2.length; h++) {
+    if (String(planData2[h][3]) === proveedorId) {
       historial.push({
-        quincenaInicio: String(planData[j][1]),
-        quincenaFin:    String(planData[j][2]),
-        totalLitros:    num(planData[j][5]),
-        precioLitro:    num(planData[j][6]),
-        subtotal:       num(planData[j][7]),
-        iva:            num(planData[j][8]),
-        totalConIVA:    num(planData[j][9]),
-        estado:         String(planData[j][10]||'GENERADA'),
-        fechaGenerada:  String(planData[j][11]||''),
+        inicio:      String(planData2[h][1]),
+        fin:         String(planData2[h][2]),
+        litros:      num(planData2[h][5]),
+        precioLitro: num(planData2[h][6]),
+        subtotal:    num(planData2[h][7]),
+        iva:         num(planData2[h][8]),
+        totalConIva: num(planData2[h][9]),
+        estado:      String(planData2[h][10] || 'GENERADA'),
+        aplicaIva:   planData2[h][12] === true || planData2[h][12] === 'true' || planData2[h][12] === 1,
       });
     }
   }
-  historial.sort(function(a, b) { return b.quincenaInicio > a.quincenaInicio ? 1 : -1; });
-  historial = historial.slice(0, 12);
+  historial.sort(function(a, b) { return b.inicio > a.inicio ? 1 : -1; });
+  historial = historial.slice(0, 10);
 
   return {
     success: true,
     data: {
-      proveedor:       { id: proveedorId, nombre: proveedorNombre },
-      ultimas7Dias:    ultimas7,
-      quincenaActual:  _resumenQuincena(qActual),
-      quincenaAnterior:_resumenQuincena(qAnterior),
-      historialPlanillas: historial,
+      proveedorNombre: proveedorNombre,
+      frecuenciaPago:  frecuenciaPago,
+      hoy: {
+        fecha:       hoy,
+        cargas:      cargasHoy,
+        totalLitros: Math.round(totalHoy * 10) / 10,
+      },
+      periodoActual:   _resumenPeriodo(periodoActual),
+      periodoAnterior: _resumenPeriodo(periodoAnterior),
+      historial:       historial,
     }
+  };
+}
+
+// Helper: calculate previous period for a proveedor
+// Pass a Date object that falls INSIDE the desired previous period
+function _calcularPeriodoAnteriorProveedor(proveedorId, dateInPrevPeriod) {
+  var provSheet = getSheet('Proveedores');
+  var provData  = provSheet.getDataRange().getValues();
+  var frecuencia = 'quincenal';
+  var diaCorte   = 1;
+  for (var i = 1; i < provData.length; i++) {
+    if (String(provData[i][0]) === proveedorId) {
+      frecuencia = String(provData[i][4] || 'quincenal');
+      diaCorte   = (provData[i][5] != null && provData[i][5] !== '') ? Number(provData[i][5]) : 1;
+      break;
+    }
+  }
+
+  if (frecuencia !== 'semanal') {
+    return calcularQuincenaAnterior(null); // existing function in Quincena.gs
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+  function fmt(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+  function fmtDDMM(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
+
+  var d   = new Date(dateInPrevPeriod);
+  var dow = d.getDay() === 0 ? 7 : d.getDay();
+  var daysFromCut = (dow - diaCorte + 7) % 7;
+  var inicio = new Date(d);
+  inicio.setDate(d.getDate() - daysFromCut);
+  var fin = new Date(inicio);
+  fin.setDate(inicio.getDate() + 6);
+
+  return {
+    tipo:   'Semana del ' + fmtDDMM(inicio) + ' al ' + fmtDDMM(fin),
+    inicio: fmt(inicio),
+    fin:    fmt(fin),
   };
 }
