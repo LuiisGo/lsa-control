@@ -13,7 +13,7 @@ function handleLogin(body) {
   var sheet = getSheet('Usuarios');
   var data  = sheet.getDataRange().getValues();
 
-  // Cols: 0=id 1=nombre 2=username 3=password 4=role 5=activo 6=apiToken
+  // Cols: 0=id 1=nombre 2=username 3=password 4=role 5=activo 6=apiToken 7=credentialId 8=publicKey 9=permisos
   for (var i = 1; i < data.length; i++) {
     var row     = data[i];
     var rowUser = String(row[2] || '').trim();
@@ -25,7 +25,7 @@ function handleLogin(body) {
       var token = generateToken();
       sheet.getRange(i + 1, 7).setValue(token);
 
-      var rawPermisos = row[9] !== undefined ? row[9] : '';
+      var rawPermisos = String(row[9] || '');
       var permisos    = _parsePermisos(rawPermisos);
 
       return {
@@ -59,7 +59,7 @@ function validateToken(token) {
     var activo = row[5];
 
     if (stored && stored === t && activo !== false && activo !== 'false' && activo !== 0) {
-      var rawPermisos = row[9] !== undefined ? row[9] : '';
+      var rawPermisos = String(row[9] || '');
       return {
         id:       String(row[0]),
         nombre:   String(row[1]),
