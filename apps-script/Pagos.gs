@@ -35,11 +35,11 @@ function saveTarifa(body, user) {
   var proveedorId     = String(body.proveedorId || body.proveedor_id || '');
   var proveedorNombre = String(body.proveedorNombre || body.proveedor_nombre || '');
   var precioLitro     = num(body.precioLitro || body.precio_litro);
-  var vigenteDesde    = String(body.vigenteDesde || getFechaHoy());
+  // Always use today — no user-provided vigenteDesde
+  var vigenteDesde    = getFechaHoy();
 
   if (!proveedorId || precioLitro <= 0) return { success: false, error: 'Datos inválidos' };
 
-  // Desactivar tarifa anterior del mismo proveedor
   var sheet = getSheet('TARIFAS_PROVEEDORES');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -55,7 +55,48 @@ function saveTarifa(body, user) {
 
 // ── PLANILLAS ─────────────────────────────────────────────────
 // Cols: 0=ID 1=Quincena_Inicio 2=Quincena_Fin 3=Proveedor_ID 4=Proveedor_Nombre
-//       5=Total_Litros 6=Precio_Litro 7=Subtotal 8=IVA 9=Total_Con_IVA 10=Estado 11=Fecha_Generada
+//       5=Total_Litros 6=Precio_Litro 7=Subtotal 8=IVA 9=Total_Con_IVA 10=Estado 11=Fecha_Generada 12=IVA_Aplicado
+
+function calcularPeriodoProveedor(proveedorId) {
+  var provSheet = getSheet('Proveedores');
+  var provData  = provSheet.getDataRange().getValues();
+  var frecuencia = 'quincenal';
+  var diaCorte   = 1; // default Monday
+
+  for (var i = 1; i < provData.length; i++) {
+    if (String(provData[i][0]) === String(proveedorId)) {
+      frecuencia = String(provData[i][4] || 'quincenal');
+      diaCorte   = (provData[i][5] != null && provData[i][5] !== '') ? Number(provData[i][5]) : 1;
+      break;
+    }
+  }
+
+  if (frecuencia !== 'semanal') {
+    return calcularQuincena(null); // existing function in Quincena.gs
+  }
+
+  // Weekly: cut day is FIRST day of period
+  var hoy    = new Date();
+  var hoyTZ  = new Date(hoy.toLocaleString('en-US', { timeZone: 'America/Guatemala' }));
+  // getDay(): 0=Sun,1=Mon...6=Sat -> map Sun to 7
+  var hoyDow = hoyTZ.getDay() === 0 ? 7 : hoyTZ.getDay();
+  var daysFromCut = (hoyDow - diaCorte + 7) % 7;
+
+  var inicio = new Date(hoyTZ);
+  inicio.setDate(hoyTZ.getDate() - daysFromCut);
+  var fin = new Date(inicio);
+  fin.setDate(inicio.getDate() + 6);
+
+  function pad(n) { return n < 10 ? '0' + n : String(n); }
+  function fmt(d) { return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); }
+  function fmtDDMM(d) { return pad(d.getDate()) + '/' + pad(d.getMonth()+1); }
+
+  return {
+    tipo:   'Semana del ' + fmtDDMM(inicio) + ' al ' + fmtDDMM(fin),
+    inicio: fmt(inicio),
+    fin:    fmt(fin),
+  };
+}
 
 function generarPlanilla(body, user) {
   if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
@@ -65,6 +106,22 @@ function generarPlanilla(body, user) {
   var qFin            = String(body.quincenaFin    || body.fin    || '');
 
   if (!proveedorId || !qInicio || !qFin) return { success: false, error: 'Datos incompletos' };
+
+  // Resolve aplicarIVA: explicit body param overrides proveedor default
+  var aplicarIVA;
+  if (body.aplicarIVA !== undefined) {
+    aplicarIVA = body.aplicarIVA === true || body.aplicarIVA === 'true' || body.aplicarIVA === 1;
+  } else {
+    var provSheet = getSheet('Proveedores');
+    var provData  = provSheet.getDataRange().getValues();
+    aplicarIVA = true; // fallback if not found
+    for (var p = 1; p < provData.length; p++) {
+      if (String(provData[p][0]) === proveedorId) {
+        aplicarIVA = provData[p][3] === true || provData[p][3] === 'true' || provData[p][3] === 1;
+        break;
+      }
+    }
+  }
 
   // Get active tariff
   var tarifaRes = getTarifaProveedor({ proveedorId: proveedorId }, user);
@@ -84,18 +141,19 @@ function generarPlanilla(body, user) {
   }
   totalLitros = Math.round(totalLitros * 10) / 10;
 
-  var subtotal   = Math.round(totalLitros * precioLitro * 100) / 100;
-  var iva        = Math.round(subtotal * 0.12 * 100) / 100;
-  var totalConIVA= Math.round((subtotal + iva) * 100) / 100;
+  var subtotal    = Math.round(totalLitros * precioLitro * 100) / 100;
+  var iva         = aplicarIVA ? Math.round(subtotal * 0.12 * 100) / 100 : 0;
+  var totalConIVA = Math.round((subtotal + iva) * 100) / 100;
 
   var id = generateId();
   getSheet('PLANILLAS').appendRow([
     id, qInicio, qFin, proveedorId, proveedorNombre,
     totalLitros, precioLitro, subtotal, iva, totalConIVA,
-    'GENERADA', getFechaHoy()
+    'GENERADA', getFechaHoy(),
+    aplicarIVA  // col 12 = IVA_Aplicado (0-indexed)
   ]);
 
-  return { success: true, data: { id: id, proveedor: proveedorNombre, totalLitros: totalLitros, precioLitro: precioLitro, subtotal: subtotal, iva: iva, totalConIVA: totalConIVA } };
+  return { success: true, data: { id: id, proveedor: proveedorNombre, totalLitros: totalLitros, precioLitro: precioLitro, subtotal: subtotal, iva: iva, totalConIVA: totalConIVA, ivaAplicado: aplicarIVA } };
 }
 
 function generarTodasLasPlanillas(body, user) {
@@ -105,11 +163,14 @@ function generarTodasLasPlanillas(body, user) {
   for (var i = 0; i < proveedores.length; i++) {
     var prov = proveedores[i];
     if (!prov.activo) continue;
+    // Skip weekly providers — generated individually with free date range
+    if (prov.frecuenciaPago === 'semanal') continue;
     var res = generarPlanilla({
       proveedorId:     prov.id,
       proveedorNombre: prov.nombre,
       quincenaInicio:  body.quincenaInicio || body.inicio || '',
       quincenaFin:     body.quincenaFin    || body.fin    || '',
+      // aplicarIVA not passed -> read from proveedor row
     }, user);
     resultados.push({ proveedor: prov.nombre, resultado: res });
   }
@@ -161,6 +222,7 @@ function _planillaObj(row) {
     totalConIVA:     num(row[9]),
     estado:          String(row[10] || 'GENERADA'),
     fechaGenerada:   String(row[11] || ''),
+    ivaAplicado:     row[12] === true || row[12] === 'true' || row[12] === 1,
   };
 }
 
@@ -209,4 +271,20 @@ function getComparativaProveedores(body, user) {
   });
   resultado.sort(function(a, b) { return b.totalLitros - a.totalLitros; });
   return { success: true, data: resultado };
+}
+
+function marcarPlanillaPagada(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
+  var id = String(body.id || '');
+  if (!id) return { success: false, error: 'ID requerido' };
+
+  var sheet = getSheet('PLANILLAS');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === id) {
+      sheet.getRange(i + 1, 11).setValue('PAGADA'); // Estado = col index 10 (0-based), sheet col 11 (1-based)
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Planilla no encontrada' };
 }
