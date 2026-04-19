@@ -36,7 +36,6 @@ interface LSASchema extends DBSchema {
       compradorId: string
       compradorNombre: string
       litrosEnviados: number
-      montoTotal: number
       notas: string
       sync_pending: boolean
       timestamp_local: number
@@ -179,7 +178,7 @@ export async function syncPending(token: string): Promise<number> {
   for (const envio of envios) {
     if (!envio.sync_pending) continue
     try {
-      const res = await apiCall('saveEnvio', { compradorId: envio.compradorId, compradorNombre: envio.compradorNombre, litrosEnviados: envio.litrosEnviados, montoTotal: envio.montoTotal, notas: envio.notas }, token)
+      const res = await apiCall('saveEnvio', { compradorId: envio.compradorId, compradorNombre: envio.compradorNombre, litrosEnviados: envio.litrosEnviados, notas: envio.notas }, token)
       if (res.success) { await db.delete('envios_pending', envio.id); synced++ }
     } catch (err) { console.error('[syncPending] envio error:', err) }
   }

@@ -22,9 +22,19 @@ export default function EnvioPage() {
   const [compradorId, setCompradorId] = useState('')
   const [compradorNombre, setCompradorNombre] = useState('')
   const [litros, setLitros] = useState('')
-  const [monto, setMonto] = useState('')
   const [notas, setNotas] = useState('')
   const [saving, setSaving] = useState(false)
+
+  interface ConfirmacionData {
+    compradorNombre: string
+    litros: number
+    totalCargaDia: number
+    totalEnviadoDia: number
+    resto: number
+    advertencia?: string
+    offline?: boolean
+  }
+  const [confirmacion, setConfirmacion] = useState<ConfirmacionData | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -59,34 +69,92 @@ export default function EnvioPage() {
     e.preventDefault()
     if (!compradorId) return toast.error('Seleccioná un comprador')
     const litrosNum = parseFloat(litros)
-    const montoNum  = parseFloat(monto)
     if (!litrosNum || litrosNum <= 0) return toast.error('Litros debe ser > 0')
-    if (!montoNum  || montoNum  <= 0) return toast.error('Monto debe ser > 0')
 
     setSaving(true)
     try {
-      const res = await apiCall('saveEnvio', {
+      const res = await apiCall<{
+        id: string; totalCargaDia: number; totalEnviadoDia: number
+        resto: number; advertencia?: string
+      }>('saveEnvio', {
         compradorId,
         compradorNombre,
         litrosEnviados: litrosNum,
-        montoTotal:     montoNum,
         notas,
       }, token)
 
-      if (res.success) {
-        toast.success('Envío registrado')
-        router.push('/empleado')
+      if (res.success && res.data) {
+        setConfirmacion({
+          compradorNombre,
+          litros: litrosNum,
+          totalCargaDia:   res.data.totalCargaDia,
+          totalEnviadoDia: res.data.totalEnviadoDia,
+          resto:           res.data.resto,
+          advertencia:     res.data.advertencia,
+        })
       } else {
         throw new Error(res.error)
       }
     } catch {
       // offline fallback
-      await savePendingEnvio({ compradorId, compradorNombre, litrosEnviados: litrosNum, montoTotal: montoNum, notas })
-      toast('Sin conexión — guardado localmente', { icon: '📵' })
-      router.push('/empleado')
+      await savePendingEnvio({ compradorId, compradorNombre, litrosEnviados: litrosNum, notas })
+      setConfirmacion({ compradorNombre, litros: litrosNum, totalCargaDia: 0, totalEnviadoDia: 0, resto: 0, offline: true })
     } finally {
       setSaving(false)
     }
+  }
+
+  if (confirmacion) {
+    return (
+      <div className="max-w-lg mx-auto space-y-5">
+        <div className="card border-green-200 bg-green-50 space-y-4">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <p className="font-semibold text-green-800">Envío registrado</p>
+          </div>
+          <p className="text-sm text-green-700">
+            <strong>{confirmacion.litros.toFixed(1)} L</strong> a {confirmacion.compradorNombre}
+          </p>
+          {confirmacion.offline ? (
+            <p className="text-sm text-slate-500 italic">Sin conexión — resto no disponible</p>
+          ) : (
+            <div className="border-t border-green-200 pt-3 space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Recepcionado hoy</span>
+                <span className="font-mono">{confirmacion.totalCargaDia.toFixed(1)} L</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">Total enviado hoy</span>
+                <span className="font-mono">{confirmacion.totalEnviadoDia.toFixed(1)} L</span>
+              </div>
+              <div className="flex justify-between border-t border-green-200 pt-1 font-semibold">
+                <span>Resto en tanque</span>
+                <span className={`font-mono ${confirmacion.resto >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                  {confirmacion.resto.toFixed(1)} L
+                </span>
+              </div>
+            </div>
+          )}
+          {confirmacion.advertencia && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              ⚠ {confirmacion.advertencia}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => {
+            setConfirmacion(null)
+            setCompradorId(''); setCompradorNombre(''); setLitros(''); setNotas('')
+          }}
+          className="btn-secondary w-full"
+        >
+          Registrar otro envío
+        </button>
+        <button onClick={() => router.push('/empleado')} className="btn-primary w-full">
+          Volver al inicio
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -144,40 +212,19 @@ export default function EnvioPage() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="label">Litros enviados</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              className="input"
-              placeholder="0.0"
-              value={litros}
-              onChange={e => setLitros(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="label">Monto total (Q)</label>
-            <input
-              type="number"
-              step="0.01"
-              min="0"
-              className="input"
-              placeholder="0.00"
-              value={monto}
-              onChange={e => setMonto(e.target.value)}
-              required
-            />
-          </div>
+        <div>
+          <label className="label">Litros enviados</label>
+          <input
+            type="number"
+            step="0.1"
+            min="0"
+            className="input"
+            placeholder="0.0"
+            value={litros}
+            onChange={e => setLitros(e.target.value)}
+            required
+          />
         </div>
-
-        {litros && monto && parseFloat(litros) > 0 && parseFloat(monto) > 0 && (
-          <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
-            Precio implícito: <strong>Q {(parseFloat(monto) / parseFloat(litros)).toFixed(4)}/L</strong>
-          </div>
-        )}
 
         <div>
           <label className="label">Notas (opcional)</label>
