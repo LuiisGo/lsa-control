@@ -149,7 +149,7 @@ export default function GastoPage() {
         {/* Foto comprobante */}
         <div>
           <label className="label">Comprobante (opcional)</label>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFoto} />
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFoto} />
           {fotoPreview ? (
             <div className="relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}

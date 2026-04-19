@@ -214,7 +214,7 @@ export default function MedicionPage() {
               <label className="btn-secondary w-full cursor-pointer flex items-center gap-2">
                 <Camera className="w-4 h-4" />
                 Tomar / elegir foto
-                <input type="file" accept="image/*" capture="environment" onChange={handleFoto} className="sr-only" />
+                <input type="file" accept="image/*" onChange={handleFoto} className="sr-only" />
               </label>
             )}
           </div>

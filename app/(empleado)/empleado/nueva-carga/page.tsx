@@ -204,7 +204,6 @@ export default function NuevaCargaPage() {
               <input
                 type="file"
                 accept="image/*"
-                capture="environment"
                 onChange={handleFoto}
                 className="sr-only"
               />
