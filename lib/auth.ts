@@ -19,6 +19,7 @@ export const authOptions: NextAuthOptions = {
           nombre: string
           email: string
           role: 'admin' | 'empleado'
+          permisos: string[]
         }>('login', {
           email: credentials.username,    // el backend recibe el campo como "email"
           username: credentials.username, // por si el backend acepta "username"
@@ -33,6 +34,7 @@ export const authOptions: NextAuthOptions = {
           email: res.data.email,
           role: res.data.role,
           apiToken: res.data.token,
+          permisos: res.data.permisos ?? [],
         }
       },
     }),
@@ -40,18 +42,21 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const u = user as unknown as { role: string; apiToken: string; id: string }
+        const u = user as unknown as { role: string; apiToken: string; id: string; permisos: string[] }
         token.role = u.role
         token.apiToken = u.apiToken
         token.userId = u.id
+        token.permisos = u.permisos
       }
       return token
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as { role: string; apiToken: string; userId: string }).role = token.role as string
-        ;(session.user as { role: string; apiToken: string; userId: string }).apiToken = token.apiToken as string
-        ;(session.user as { role: string; apiToken: string; userId: string }).userId = token.userId as string
+        const u = session.user as { role: string; apiToken: string; userId: string; permisos: string[] }
+        u.role = token.role as string
+        u.apiToken = token.apiToken as string
+        u.userId = token.userId as string
+        u.permisos = (token.permisos as string[]) ?? []
       }
       return session
     },
