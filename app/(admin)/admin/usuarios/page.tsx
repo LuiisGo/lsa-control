@@ -7,12 +7,21 @@ import { webAuthnRegister, isWebAuthnAvailable } from '@/lib/webauthn'
 import { ModalConfirmar } from '@/components/ModalConfirmar'
 import toast from 'react-hot-toast'
 
+const ALL_PERMISOS = [
+  { key: 'cargas',     label: 'Registrar cargas de leche' },
+  { key: 'medicion',   label: 'Registrar medición con regla' },
+  { key: 'envios',     label: 'Registrar envíos' },
+  { key: 'gastos',     label: 'Registrar gastos operativos' },
+  { key: 'remanentes', label: 'Registrar remanentes' },
+] as const
+
 interface Usuario {
   id: string
   nombre: string
   username: string
   role: 'admin' | 'empleado'
   activo: boolean
+  permisos?: string[]
 }
 
 export default function UsuariosPage() {
@@ -29,6 +38,7 @@ export default function UsuariosPage() {
   const [deleting, setDeleting] = useState(false)
 
   const [form, setForm] = useState({ nombre: '', username: '', role: 'empleado', password: '' })
+  const [permisos, setPermisos] = useState<string[]>(['cargas','medicion','envios','gastos','remanentes'])
   const [showPassword, setShowPassword] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
@@ -87,11 +97,15 @@ export default function UsuariosPage() {
     if (!validateForm()) return
     setSaving(true)
     try {
-      const res = await apiCall('saveUsuario', form, token)
+      const res = await apiCall('saveUsuario', {
+        ...form,
+        permisos: form.role === 'empleado' ? permisos : undefined,
+      }, token)
       if (res.success) {
         toast.success('Usuario creado')
         setShowModal(false)
         setForm({ nombre: '', username: '', role: 'empleado', password: '' })
+        setPermisos(['cargas','medicion','envios','gastos','remanentes'])
         load()
       } else {
         toast.error(res.error ?? 'Error al crear usuario')
@@ -144,6 +158,13 @@ export default function UsuariosPage() {
                       <span className={u.role === 'admin' ? 'badge-primary' : 'badge-slate'}>
                         {u.role}
                       </span>
+                      {u.role === 'empleado' && u.permisos && u.permisos.length < 5 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {u.permisos.map(p => (
+                            <span key={p} className="text-xs bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">{p}</span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className={u.activo ? 'badge-success' : 'badge-danger'}>
@@ -229,6 +250,28 @@ export default function UsuariosPage() {
                   <option value="admin">Administrador</option>
                 </select>
               </div>
+              {form.role === 'empleado' && (
+                <div>
+                  <label className="label">Permisos de acceso</label>
+                  <div className="space-y-2 mt-1">
+                    {ALL_PERMISOS.map(p => (
+                      <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded"
+                          checked={permisos.includes(p.key)}
+                          onChange={e => {
+                            if (e.target.checked) setPermisos(prev => [...prev, p.key])
+                            else setPermisos(prev => prev.filter(x => x !== p.key))
+                          }}
+                          disabled={saving}
+                        />
+                        <span>{p.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="label label-required">Contraseña</label>
                 <div className="relative">
