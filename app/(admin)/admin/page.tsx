@@ -34,6 +34,18 @@ interface DatoProveedor {
   proveedor: string; t1: number; t2: number; total: number
 }
 
+interface ResumenDia {
+  fecha: string
+  ingresos: number
+  litrosRecibidos: number
+  gastos: number
+  margen: number
+  enviosCount: number
+  litrosRecepcionados: number
+  litrosEnviados: number
+  restoEstimado: number
+}
+
 // ─── Quincena helpers ────────────────────────────────────────────────────────
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
@@ -139,13 +151,19 @@ export default function AdminDashboardPage() {
   const [campoPie, setCampoPie] = useState<'total' | 't1' | 't2'>('total')
   const [loadingPeriodo, setLoadingPeriodo] = useState(false)
 
+  const [resumen, setResumen] = useState<ResumenDia | null>(null)
+
   // ── Load HOY ──
   const loadHoy = useCallback(async () => {
     if (!token) return
     setLoadingHoy(true)
     try {
-      const r = await apiCall<DashboardHoy>('getDashboardHoy', {}, token)
+      const [r, rDia] = await Promise.all([
+        apiCall<DashboardHoy>('getDashboardHoy', {}, token),
+        apiCall<ResumenDia>('getResumenFinancieroDia', {}, token),
+      ])
       if (r.success && r.data) setHoy(r.data)
+      if (rDia.success && rDia.data) setResumen(rDia.data)
       setLastUpdate(new Date().toLocaleTimeString('es-GT'))
     } catch { toast.error('Error al cargar datos de hoy') }
     finally { setLoadingHoy(false) }
@@ -274,6 +292,28 @@ export default function AdminDashboardPage() {
             <p className="text-sm text-slate-400">No se registró medición hoy</p>
           )}
         </div>
+
+        {resumen && !loadingHoy && (
+          <div className="card mb-4">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Movimiento del tanque</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Recepcionado</p>
+                <p className="font-mono font-semibold">{(resumen.litrosRecepcionados ?? 0).toFixed(1)} L</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Enviado</p>
+                <p className="font-mono font-semibold">{(resumen.litrosEnviados ?? 0).toFixed(1)} L</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Resto</p>
+                <p className={`font-mono font-bold ${(resumen.restoEstimado ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                  {(resumen.restoEstimado ?? 0).toFixed(1)} L
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Cargas del día</p>
         <TablaCargas cargas={hoy?.cargas ?? []} showActions onEdit={setEditCarga} isLoading={loadingHoy} />
