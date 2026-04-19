@@ -303,6 +303,7 @@ function saveUsuario(body, user) {
         sheet.getRange(i+1,3).setValue(username);
         if (password) sheet.getRange(i+1,4).setValue(password);
         sheet.getRange(i+1,5).setValue(role);
+        if (body.permisos) sheet.getRange(i+1,10).setValue(JSON.stringify(body.permisos));
         return { success: true };
       }
     }
@@ -311,7 +312,9 @@ function saveUsuario(body, user) {
     if (String(data[j][2]).toLowerCase() === username.toLowerCase()) return { success: false, error: 'Usuario ya existe' };
   }
   var id = generateId();
-  sheet.appendRow([id, nombre, username, password, role, true, '']);
+  var permisosJson = body.permisos ? JSON.stringify(body.permisos) : JSON.stringify(['cargas','medicion','envios','gastos','remanentes']);
+  // 10 cols: ID Nombre Username Password Role Activo ApiToken credentialId publicKey Permisos
+  sheet.appendRow([id, nombre, username, password, role, true, '', '', '', permisosJson]);
   return { success: true, data: { id: id } };
 }
 

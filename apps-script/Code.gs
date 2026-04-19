@@ -121,6 +121,8 @@ function doPost(e) {
       // ── Fase 2: Planillas ─────────────────────────────────
       case 'generarPlanilla':          return respond(generarPlanilla(body, user));
       case 'generarTodasLasPlanillas': return respond(generarTodasLasPlanillas(body, user));
+      case 'marcarPlanillaPagada':     return respond(marcarPlanillaPagada(body, user));
+      case 'calcularPeriodoProveedor': return respond(calcularPeriodoProveedor(body.proveedorId || body.proveedor_id || ''));
       case 'getPlanillasQuincena':     return respond(getPlanillasQuincena(body, user));
       case 'getPlanillasPorProveedor': return respond(getPlanillasPorProveedor(body, user));
       case 'getComparativaProveedores': return respond(getComparativaProveedores(body, user));
