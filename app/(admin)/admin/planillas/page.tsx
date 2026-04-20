@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
-import { FileSpreadsheet, Printer, RefreshCw, Play } from 'lucide-react'
+import { FileSpreadsheet, Printer, RefreshCw, Play, Loader2 } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { formatQ, getQuincenasRecientes } from '@/lib/utils'
 import toast from 'react-hot-toast'
@@ -10,7 +10,13 @@ interface Planilla {
   id: string; quincenaInicio: string; quincenaFin: string
   proveedorId: string; proveedorNombre: string
   totalLitros: number; precioLitro: number
-  subtotal: number; iva: number; totalConIVA: number; estado: string
+  subtotal: number; iva: number; totalConIVA: number
+  estado: string; ivaAplicado: boolean
+}
+
+interface Proveedor {
+  id: string; nombre: string; activo: boolean
+  frecuenciaPago: string; diaCorte: number
 }
 
 const quincenas = getQuincenasRecientes(6)
@@ -19,20 +25,33 @@ export default function PlanillasPage() {
   const { data: session } = useSession()
   const token = (session?.user as { apiToken?: string })?.apiToken
 
+  // Quincena selector + main table
   const [qIdx, setQIdx] = useState(0)
   const [planillas, setPlanillas] = useState<Planilla[]>([])
   const [totalConIVA, setTotalConIVA] = useState(0)
   const [loading, setLoading] = useState(false)
   const [generando, setGenerando] = useState(false)
+  const [marcandoPagada, setMarcandoPagada] = useState<string | null>(null)
   const [reciboData, setReciboData] = useState<Planilla | null>(null)
   const printRef = useRef<HTMLDivElement>(null)
 
+  // Semanal section
+  const [proveedores, setProveedores] = useState<Proveedor[]>([])
+  const [semDesde, setSemDesde] = useState('')
+  const [semHasta, setSemHasta] = useState('')
+  const [generandoSemanal, setGenerandoSemanal] = useState<string | null>(null)
+
   const q = quincenas[qIdx]
+  const proveedoresSemanales = proveedores.filter(p => p.activo && p.frecuenciaPago === 'semanal')
 
   async function loadPlanillas() {
     if (!token || !q) return
     setLoading(true)
-    const res = await apiCall<{ planillas: Planilla[]; totalConIVA: number }>('getPlanillasQuincena', { quincenaInicio: q.inicio, quincenaFin: q.fin }, token)
+    const res = await apiCall<{ planillas: Planilla[]; totalConIVA: number }>(
+      'getPlanillasQuincena',
+      { quincenaInicio: q.inicio, quincenaFin: q.fin },
+      token
+    )
     if (res.success && res.data) {
       setPlanillas(res.data.planillas)
       setTotalConIVA(res.data.totalConIVA)
@@ -40,7 +59,14 @@ export default function PlanillasPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadPlanillas() }, [token, qIdx])
+  async function loadProveedores() {
+    if (!token) return
+    const res = await apiCall<Proveedor[]>('getProveedores', {}, token)
+    if (res.success && res.data) setProveedores(res.data)
+  }
+
+  useEffect(() => { loadPlanillas() }, [token, qIdx]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadProveedores() }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleGenerar() {
     if (!q || !token) return
@@ -54,6 +80,33 @@ export default function PlanillasPage() {
     setGenerando(false)
   }
 
+  async function handleMarcarPagada(id: string) {
+    if (!confirm('¿Marcar esta planilla como pagada?')) return
+    setMarcandoPagada(id)
+    const res = await apiCall('marcarPlanillaPagada', { id }, token)
+    if (res.success) {
+      toast.success('Planilla marcada como pagada')
+      loadPlanillas()
+    } else toast.error(res.error || 'Error')
+    setMarcandoPagada(null)
+  }
+
+  async function handleGenerarSemanal(prov: Proveedor) {
+    if (!semDesde || !semHasta) return toast.error('Seleccioná el rango de fechas')
+    setGenerandoSemanal(prov.id)
+    const res = await apiCall('generarPlanilla', {
+      proveedorId: prov.id,
+      proveedorNombre: prov.nombre,
+      quincenaInicio: semDesde,
+      quincenaFin: semHasta,
+    }, token)
+    if (res.success) {
+      toast.success(`Planilla generada para ${prov.nombre}`)
+      loadPlanillas()
+    } else toast.error(res.error || 'Error')
+    setGenerandoSemanal(null)
+  }
+
   function handlePrint(p: Planilla) {
     setReciboData(p)
     setTimeout(() => window.print(), 300)
@@ -61,7 +114,7 @@ export default function PlanillasPage() {
 
   return (
     <div className="space-y-6">
-      {/* Recibo imprimible — oculto en pantalla, visible al imprimir */}
+      {/* Recibo imprimible */}
       {reciboData && (
         <div ref={printRef} className="hidden print:block fixed inset-0 bg-white p-8 z-50">
           <div className="max-w-sm mx-auto text-center border border-slate-200 rounded-xl p-6 space-y-4">
@@ -71,14 +124,31 @@ export default function PlanillasPage() {
               <p className="text-sm text-slate-500">Período: {reciboData.quincenaInicio} — {reciboData.quincenaFin}</p>
             </div>
             <div className="border-t border-b border-slate-200 py-4 space-y-2 text-sm text-left">
-              <div className="flex justify-between"><span>Proveedor:</span><span className="font-semibold">{reciboData.proveedorNombre}</span></div>
-              <div className="flex justify-between"><span>Litros entregados:</span><span className="font-mono">{reciboData.totalLitros.toFixed(1)} L</span></div>
-              <div className="flex justify-between"><span>Precio por litro:</span><span className="font-mono">{formatQ(reciboData.precioLitro)}</span></div>
-              <div className="flex justify-between"><span>Subtotal:</span><span className="font-mono">{formatQ(reciboData.subtotal)}</span></div>
-              <div className="flex justify-between"><span>IVA (12%):</span><span className="font-mono">{formatQ(reciboData.iva)}</span></div>
+              <div className="flex justify-between">
+                <span>Proveedor:</span>
+                <span className="font-semibold">{reciboData.proveedorNombre}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Litros entregados:</span>
+                <span className="font-mono">{reciboData.totalLitros.toFixed(1)} L</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Precio por litro:</span>
+                <span className="font-mono">{formatQ(reciboData.precioLitro)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Subtotal:</span>
+                <span className="font-mono">{formatQ(reciboData.subtotal)}</span>
+              </div>
+              {reciboData.ivaAplicado && (
+                <div className="flex justify-between">
+                  <span>IVA (12%):</span>
+                  <span className="font-mono">{formatQ(reciboData.iva)}</span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between items-center text-base font-bold">
-              <span>TOTAL A PAGAR</span>
+            <div className="flex justify-between border-t pt-2 items-center text-base font-bold">
+              <span>{reciboData.ivaAplicado ? 'TOTAL CON IVA' : 'TOTAL A PAGAR'}</span>
               <span className="text-xl">{formatQ(reciboData.totalConIVA)}</span>
             </div>
             <div className="space-y-8 pt-4 text-xs text-slate-400">
@@ -91,21 +161,30 @@ export default function PlanillasPage() {
         </div>
       )}
 
+      {/* Header */}
       <div className="flex items-center justify-between print:hidden">
         <h1 className="text-xl font-bold text-slate-800">Planillas de Pago</h1>
-        <button onClick={loadPlanillas} className="btn-ghost btn-icon"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+        <button onClick={loadPlanillas} className="btn-ghost btn-icon">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
+      {/* Quincena selector + generate button */}
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <select className="input max-w-xs" value={qIdx} onChange={e => setQIdx(parseInt(e.target.value))}>
+        <select
+          className="input max-w-xs"
+          value={qIdx}
+          onChange={e => setQIdx(parseInt(e.target.value))}
+        >
           {quincenas.map((q, i) => <option key={i} value={i}>{q.label}</option>)}
         </select>
         <button onClick={handleGenerar} disabled={generando} className="btn-primary flex items-center gap-2">
-          <Play className="w-4 h-4" />
+          {generando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
           {generando ? 'Generando...' : 'Generar todas'}
         </button>
       </div>
 
+      {/* Total card */}
       {totalConIVA > 0 && (
         <div className="card border-primary-200 bg-primary-50 print:hidden">
           <div className="flex justify-between items-center">
@@ -115,6 +194,7 @@ export default function PlanillasPage() {
         </div>
       )}
 
+      {/* Main planillas table */}
       <div className="card overflow-x-auto print:hidden">
         {loading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="skeleton h-12 w-full" />)}</div>
@@ -139,19 +219,108 @@ export default function PlanillasPage() {
                   <td className="text-right font-mono">{p.totalLitros.toFixed(1)}</td>
                   <td className="text-right font-mono">{p.precioLitro.toFixed(4)}</td>
                   <td className="text-right font-mono">{formatQ(p.subtotal)}</td>
-                  <td className="text-right font-mono">{formatQ(p.iva)}</td>
+                  <td className="text-right font-mono text-slate-500">
+                    {p.ivaAplicado ? formatQ(p.iva) : '—'}
+                  </td>
                   <td className="text-right font-mono font-semibold">{formatQ(p.totalConIVA)}</td>
-                  <td><span className="badge-slate">{p.estado}</span></td>
                   <td>
-                    <button onClick={() => handlePrint(p)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" title="Imprimir recibo">
-                      <Printer className="w-4 h-4" />
-                    </button>
+                    {p.estado === 'PAGADA'
+                      ? <span className="badge-success">PAGADA</span>
+                      : <span className="badge-slate">GENERADA</span>
+                    }
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-1">
+                      {p.estado === 'GENERADA' && (
+                        <button
+                          onClick={() => handleMarcarPagada(p.id)}
+                          disabled={marcandoPagada === p.id}
+                          className="p-1.5 text-success-600 hover:bg-success-50 rounded-lg transition-colors text-xs font-medium disabled:opacity-50"
+                          title="Marcar como pagada"
+                        >
+                          {marcandoPagada === p.id ? '...' : '✓ Pagada'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handlePrint(p)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        title="Imprimir recibo"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {planillas.length === 0 && <tr><td colSpan={8} className="text-center text-slate-400 py-6">Sin planillas para esta quincena — generá las planillas primero</td></tr>}
+              {planillas.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="text-center text-slate-400 py-6">
+                    Sin planillas para esta quincena — generá las planillas primero
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
+        )}
+      </div>
+
+      {/* Sección proveedores semanales */}
+      <div className="card space-y-4 print:hidden">
+        <div className="flex items-center gap-2">
+          <FileSpreadsheet className="w-4 h-4 text-purple-500" />
+          <h2 className="section-title">Proveedores Semanales</h2>
+        </div>
+        <p className="text-sm text-slate-500">
+          Seleccioná el rango de fechas para generar planillas semanales individualmente.
+        </p>
+
+        <div className="flex gap-3 flex-wrap">
+          <div>
+            <label className="label">Desde</label>
+            <input
+              type="date"
+              className="input"
+              value={semDesde}
+              onChange={e => setSemDesde(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">Hasta</label>
+            <input
+              type="date"
+              className="input"
+              value={semHasta}
+              onChange={e => setSemHasta(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {proveedoresSemanales.length > 0 ? (
+          <div className="space-y-2">
+            {proveedoresSemanales.map(p => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between p-3 border border-slate-100 rounded-xl bg-slate-50"
+              >
+                <div>
+                  <span className="font-medium text-sm text-slate-800">{p.nombre}</span>
+                  <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">Semanal</span>
+                </div>
+                <button
+                  onClick={() => handleGenerarSemanal(p)}
+                  disabled={!semDesde || !semHasta || generandoSemanal === p.id}
+                  className="btn-primary flex items-center gap-1.5 text-sm py-1.5 disabled:opacity-50"
+                >
+                  {generandoSemanal === p.id
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generando...</>
+                    : <><Play className="w-3.5 h-3.5" />Generar</>
+                  }
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">Sin proveedores semanales registrados</p>
         )}
       </div>
     </div>

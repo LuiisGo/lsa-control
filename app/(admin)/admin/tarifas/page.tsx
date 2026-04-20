@@ -19,7 +19,6 @@ export default function TarifasPage() {
 
   const [proveedorId, setProveedorId] = useState('')
   const [precio, setPrecio] = useState('')
-  const [vigenteDesde, setVigenteDesde] = useState(new Date().toISOString().slice(0, 10))
   const [saving, setSaving] = useState(false)
 
   async function load() {
@@ -44,7 +43,7 @@ export default function TarifasPage() {
     if (!prov) return
 
     setSaving(true)
-    const res = await apiCall('saveTarifa', { proveedorId, proveedorNombre: prov.nombre, precioLitro: precioNum, vigenteDesde }, token)
+    const res = await apiCall('saveTarifa', { proveedorId, proveedorNombre: prov.nombre, precioLitro: precioNum }, token)
     if (res.success) {
       toast.success('Tarifa guardada — tarifa anterior desactivada')
       setPrecio('')
@@ -67,7 +66,7 @@ export default function TarifasPage() {
       <form onSubmit={handleSave} className="card space-y-4">
         <h2 className="section-title">Nueva Tarifa</h2>
         <p className="text-sm text-slate-500">Al guardar, la tarifa anterior del proveedor se desactiva automáticamente.</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="label">Proveedor</label>
             <select className="input" value={proveedorId} onChange={e => setProveedorId(e.target.value)} required>
@@ -78,10 +77,6 @@ export default function TarifasPage() {
           <div>
             <label className="label">Q/Litro</label>
             <input type="number" step="0.0001" min="0" className="input" placeholder="0.0000" value={precio} onChange={e => setPrecio(e.target.value)} required />
-          </div>
-          <div>
-            <label className="label">Vigente desde</label>
-            <input type="date" className="input" value={vigenteDesde} onChange={e => setVigenteDesde(e.target.value)} required />
           </div>
         </div>
         <button type="submit" disabled={saving} className="btn-primary flex items-center gap-2">
