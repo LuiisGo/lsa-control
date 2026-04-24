@@ -13,6 +13,7 @@ interface Proveedor {
   aplicaIVA: boolean
   frecuenciaPago: string
   diaCorte: number
+  codigo: string
 }
 
 interface AccesoPortal {
@@ -39,11 +40,13 @@ export default function ProveedoresPage() {
 
   // Add form
   const [nombre, setNombre] = useState('')
+  const [codigo, setCodigo] = useState('')
   const [aplicaIVA, setAplicaIVA] = useState(true)
   const [frecuenciaPago, setFrecuenciaPago] = useState('quincenal')
   const [diaCorte, setDiaCorte] = useState(1)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [codigoError, setCodigoError] = useState('')
 
   // Row actions
   const [toggling, setToggling] = useState<string | null>(null)
@@ -78,26 +81,36 @@ export default function ProveedoresPage() {
 
   function resetForm() {
     setNombre('')
+    setCodigo('')
     setAplicaIVA(true)
     setFrecuenciaPago('quincenal')
     setDiaCorte(1)
     setError('')
+    setCodigoError('')
   }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
     if (!nombre.trim()) { setError('Ingresá un nombre'); return }
+    const codigoTrim = codigo.trim().toUpperCase()
+    if (codigoTrim && !/^[A-Z]{3}[0-9]{3}$/.test(codigoTrim)) {
+      setCodigoError('Formato inválido. Usar 3 letras + 3 números (ej: LSA001)')
+      return
+    }
     setSaving(true)
     setError('')
+    setCodigoError('')
     try {
-      const res = await apiCall('saveProveedor', {
+      const res = await apiCall<{ codigo?: string }>('saveProveedor', {
         nombre: nombre.trim(),
+        codigo: codigoTrim,
         aplicaIVA,
         frecuenciaPago,
         diaCorte: frecuenciaPago === 'semanal' ? diaCorte : 1,
       }, token)
       if (res.success) {
-        toast.success('Proveedor agregado')
+        const asignado = res.data?.codigo
+        toast.success(asignado ? `Proveedor agregado (${asignado})` : 'Proveedor agregado')
         resetForm()
         load()
       } else {
@@ -182,17 +195,33 @@ export default function ProveedoresPage() {
       <div className="card">
         <h2 className="text-sm font-semibold text-slate-700 mb-4">Agregar proveedor</h2>
         <form onSubmit={handleAdd} className="space-y-4">
-          <div>
-            <label className="label">Nombre</label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={e => { setNombre(e.target.value); setError('') }}
-              className={`input ${error ? 'input-error' : ''}`}
-              placeholder="Nombre del proveedor"
-              disabled={saving}
-            />
-            {error && <p className="error-msg mt-1"><AlertCircle className="w-3.5 h-3.5" />{error}</p>}
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr,auto] gap-4">
+            <div>
+              <label className="label">Nombre</label>
+              <input
+                type="text"
+                value={nombre}
+                onChange={e => { setNombre(e.target.value); setError('') }}
+                className={`input ${error ? 'input-error' : ''}`}
+                placeholder="Nombre del proveedor"
+                disabled={saving}
+              />
+              {error && <p className="error-msg mt-1"><AlertCircle className="w-3.5 h-3.5" />{error}</p>}
+            </div>
+            <div>
+              <label className="label">Código <span className="text-slate-400 font-normal">(opcional)</span></label>
+              <input
+                type="text"
+                value={codigo}
+                onChange={e => { setCodigo(e.target.value.toUpperCase().slice(0, 6)); setCodigoError('') }}
+                className={`input font-mono tracking-wider uppercase sm:w-32 ${codigoError ? 'input-error' : ''}`}
+                placeholder="LSA001"
+                maxLength={6}
+                disabled={saving}
+              />
+              <p className="text-xs text-slate-400 mt-1">3 letras + 3 números</p>
+              {codigoError && <p className="error-msg mt-1"><AlertCircle className="w-3.5 h-3.5" />{codigoError}</p>}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -289,9 +318,19 @@ export default function ProveedoresPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-2 h-2 rounded-full shrink-0 ${p.activo ? 'bg-success-500' : 'bg-slate-300'}`} />
                     <div className="min-w-0">
-                      <span className={`text-sm font-medium ${!p.activo ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-                        {p.nombre}
-                      </span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        {p.codigo && (
+                          <span
+                            className="shrink-0 text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 tracking-wider"
+                            title="Código de proveedor (inmutable)"
+                          >
+                            {p.codigo}
+                          </span>
+                        )}
+                        <span className={`text-sm font-medium truncate ${!p.activo ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                          {p.nombre}
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         {!p.activo && <span className="badge-slate text-xs">Inactivo</span>}
                         <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">

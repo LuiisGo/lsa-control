@@ -73,10 +73,11 @@ function doPost(e) {
       case 'deleteMedicion': return respond(deleteMedicion(body, user));
 
       // ── Fase 1: Proveedores ───────────────────────────────
-      case 'getProveedores':  return respond(getProveedores(user));
-      case 'saveProveedor':   return respond(saveProveedor(body, user));
-      case 'toggleProveedor': return respond(toggleProveedor(body, user));
-      case 'deleteProveedor': return respond(deleteProveedor(body, user));
+      case 'getProveedores':       return respond(getProveedores(user));
+      case 'saveProveedor':        return respond(saveProveedor(body, user));
+      case 'toggleProveedor':      return respond(toggleProveedor(body, user));
+      case 'deleteProveedor':      return respond(deleteProveedor(body, user));
+      case 'getProveedorPorCodigo': return respond(getProveedorPorCodigo(body, user));
 
       // ── Fase 1: Usuarios ──────────────────────────────────
       case 'getUsuarios':   return respond(getUsuarios(user));

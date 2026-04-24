@@ -21,7 +21,7 @@ interface HistorialItem {
   subtotal: number; iva: number; totalConIva: number; estado: string; aplicaIva: boolean
 }
 interface PortalData {
-  proveedorNombre: string; frecuenciaPago: string
+  proveedorNombre: string; proveedorCodigo?: string; frecuenciaPago: string
   hoy: { fecha: string; cargas: CargaDia[]; totalLitros: number }
   periodoActual:   PeriodoData
   periodoAnterior: PeriodoData
@@ -60,28 +60,32 @@ function BarChart({ cargas }: { cargas: CargaPeriodo[] }) {
   useEffect(() => {
     if (!ref.current) return
     const canvas = ref.current
-    import('chart.js/auto').then(({ Chart }) => {
-      if (inst.current) inst.current.destroy()
-      inst.current = new Chart(canvas, {
-        type: 'bar',
-        data: {
-          labels: cargas.map(c => c.fecha.slice(5)),
-          datasets: [{
-            label: 'Litros',
-            data: cargas.map(c => c.totalLitros),
-            backgroundColor: 'rgba(22,163,74,0.5)',
-            borderColor: '#16a34a',
-            borderWidth: 1,
-          }],
-        },
-        options: {
-          responsive: true,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true } },
-        },
+    let cancelled = false
+    import('chart.js/auto')
+      .then(({ Chart }) => {
+        if (cancelled) return
+        if (inst.current) inst.current.destroy()
+        inst.current = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: cargas.map(c => c.fecha.slice(5)),
+            datasets: [{
+              label: 'Litros',
+              data: cargas.map(c => c.totalLitros),
+              backgroundColor: 'rgba(22,163,74,0.5)',
+              borderColor: '#16a34a',
+              borderWidth: 1,
+            }],
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } },
+          },
+        })
       })
-    })
-    return () => { inst.current?.destroy() }
+      .catch(() => { /* chart optional; table already shows data */ })
+    return () => { cancelled = true; inst.current?.destroy() }
   }, [cargas])
 
   return <canvas ref={ref} className="w-full max-h-48" />
@@ -280,7 +284,12 @@ export default function PortalPage({ params }: { params: Promise<{ token: string
           <div className="flex items-center gap-3">
             <Droplets className="w-5 h-5 shrink-0" />
             <div>
-              <p className="font-bold leading-tight">{d.proveedorNombre}</p>
+              <p className="font-bold leading-tight">
+                {d.proveedorCodigo && (
+                  <span className="font-mono text-blue-200 mr-2">[{d.proveedorCodigo}]</span>
+                )}
+                {d.proveedorNombre}
+              </p>
               <p className="text-xs text-blue-200">Agrícola San Antonio</p>
             </div>
           </div>

@@ -6,7 +6,7 @@ import { apiCall } from '@/lib/api'
 import { formatFecha } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
-interface Proveedor { id: string; nombre: string; activo: boolean }
+interface Proveedor { id: string; nombre: string; activo: boolean; codigo?: string }
 interface Tarifa { id: string; proveedorId: string; proveedorNombre: string; precioLitro: number; vigenteDesde: string; activo: boolean }
 
 export default function TarifasPage() {
@@ -71,7 +71,7 @@ export default function TarifasPage() {
             <label className="label">Proveedor</label>
             <select className="input" value={proveedorId} onChange={e => setProveedorId(e.target.value)} required>
               <option value="">Seleccionar...</option>
-              {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              {proveedores.map(p => <option key={p.id} value={p.id}>{p.codigo ? `[${p.codigo}] ${p.nombre}` : p.nombre}</option>)}
             </select>
           </div>
           <div>

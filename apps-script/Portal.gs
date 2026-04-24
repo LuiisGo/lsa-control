@@ -91,13 +91,15 @@ function getPortalProveedor(body) {
   var proveedorNombre = loginRes.data.proveedorNombre;
   var hoy             = getFechaHoy();
 
-  // Read proveedor frecuencia (col 4 = Frecuencia_Pago)
+  // Read proveedor frecuencia (col 4 = Frecuencia_Pago) + codigo (col 6 = Codigo)
   var provSheet = getSheet('Proveedores');
   var provData  = provSheet.getDataRange().getValues();
   var frecuenciaPago = 'quincenal';
+  var proveedorCodigo = '';
   for (var pi = 1; pi < provData.length; pi++) {
     if (String(provData[pi][0]) === proveedorId) {
-      frecuenciaPago = String(provData[pi][4] || 'quincenal');
+      frecuenciaPago  = String(provData[pi][4] || 'quincenal');
+      proveedorCodigo = String(provData[pi][6] || '');
       break;
     }
   }
@@ -206,6 +208,7 @@ function getPortalProveedor(body) {
     success: true,
     data: {
       proveedorNombre: proveedorNombre,
+      proveedorCodigo: proveedorCodigo,
       frecuenciaPago:  frecuenciaPago,
       hoy: {
         fecha:       hoy,

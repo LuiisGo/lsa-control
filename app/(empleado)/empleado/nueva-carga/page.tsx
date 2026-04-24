@@ -13,6 +13,7 @@ interface Proveedor {
   id: string
   nombre: string
   activo: boolean
+  codigo?: string
 }
 
 export default function NuevaCargaPage() {
@@ -134,7 +135,7 @@ export default function NuevaCargaPage() {
           >
             <option value="">Seleccioná un proveedor</option>
             {proveedores.map(p => (
-              <option key={p.id} value={p.nombre}>{p.nombre}</option>
+              <option key={p.id} value={p.nombre}>{p.codigo ? `[${p.codigo}] ${p.nombre}` : p.nombre}</option>
             ))}
           </select>
           {errors.proveedor && <p className="error-msg"><AlertCircle className="w-3.5 h-3.5" />{errors.proveedor}</p>}

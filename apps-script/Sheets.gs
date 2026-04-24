@@ -228,9 +228,27 @@ function getProveedores(user) {
       aplicaIVA:     row[3] === true  || row[3] === 'true'  || row[3] === 1,
       frecuenciaPago:String(row[4] || 'quincenal'),
       diaCorte:      (row[5] != null && row[5] !== '') ? Number(row[5]) : 1,
+      codigo:        String(row[6]||''),
     });
   }
   return { success: true, data: lista };
+}
+
+function _generarCodigoProveedor(nombre, existentes) {
+  var base = String(nombre||'')
+    .toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z]/g, '');
+  while (base.length < 3) base += 'X';
+  var prefix = base.slice(0, 3);
+  var existSet = {};
+  for (var i = 0; i < existentes.length; i++) existSet[existentes[i]] = true;
+  for (var n = 1; n <= 999; n++) {
+    var cand = prefix + ('00' + n).slice(-3);
+    if (!existSet[cand]) return cand;
+  }
+  // fallback: prefijo + sufijo aleatorio
+  return prefix + Math.floor(Math.random() * 900 + 100);
 }
 
 function saveProveedor(body, user) {
@@ -239,14 +257,73 @@ function saveProveedor(body, user) {
   var aplicaIVA  = body.aplicaIVA === true || body.aplicaIVA === 'true' || body.aplicaIVA === 1;
   var frecuencia = String(body.frecuenciaPago || 'quincenal');
   var diaCorte   = (body.diaCorte != null && body.diaCorte !== '') ? Number(body.diaCorte) : 1;
+
   var sheet = getSheet('Proveedores');
   var data  = sheet.getDataRange().getValues();
+
+  // ── Edición ─────────────────────────────────────────────────
+  if (body.id) {
+    for (var e = 1; e < data.length; e++) {
+      if (String(data[e][0]) === String(body.id)) {
+        // nombre único (excluyendo la propia fila)
+        for (var k = 1; k < data.length; k++) {
+          if (k !== e && String(data[k][1]).toLowerCase() === nombre.toLowerCase()) {
+            return { success: false, error: 'Proveedor ya existe' };
+          }
+        }
+        sheet.getRange(e+1, 2).setValue(nombre);
+        sheet.getRange(e+1, 4).setValue(aplicaIVA);
+        sheet.getRange(e+1, 5).setValue(frecuencia);
+        sheet.getRange(e+1, 6).setValue(diaCorte);
+        // codigo es inmutable; ignorar cualquier cambio entrante
+        return { success: true, data: { id: String(body.id), codigo: String(data[e][6]||'') } };
+      }
+    }
+    return { success: false, error: 'Proveedor no encontrado' };
+  }
+
+  // ── Creación ────────────────────────────────────────────────
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][1]).toLowerCase() === nombre.toLowerCase()) return { success: false, error: 'Proveedor ya existe' };
   }
+
+  // Validar / generar código
+  var codigo = String(body.codigo||'').trim().toUpperCase();
+  var codigosExistentes = [];
+  for (var j = 1; j < data.length; j++) {
+    if (data[j][6]) codigosExistentes.push(String(data[j][6]).toUpperCase());
+  }
+  if (codigo) {
+    if (!/^[A-Z]{3}[0-9]{3}$/.test(codigo)) {
+      return { success: false, error: 'Formato inválido. Usar 3 letras + 3 números. Ejemplo: LSA001' };
+    }
+    for (var c = 0; c < codigosExistentes.length; c++) {
+      if (codigosExistentes[c] === codigo) return { success: false, error: 'Este código ya está en uso' };
+    }
+  } else {
+    codigo = _generarCodigoProveedor(nombre, codigosExistentes);
+  }
+
   var id = generateId();
-  sheet.appendRow([id, nombre, true, aplicaIVA, frecuencia, diaCorte]);
-  return { success: true, data: { id: id, nombre: nombre, activo: true, aplicaIVA: aplicaIVA, frecuenciaPago: frecuencia, diaCorte: diaCorte } };
+  sheet.appendRow([id, nombre, true, aplicaIVA, frecuencia, diaCorte, codigo]);
+  return { success: true, data: { id: id, nombre: nombre, activo: true, aplicaIVA: aplicaIVA, frecuenciaPago: frecuencia, diaCorte: diaCorte, codigo: codigo } };
+}
+
+function getProveedorPorCodigo(body, user) {
+  var codigo = String(body.codigo||'').trim().toUpperCase();
+  if (!codigo) return { success: false, error: 'Código requerido' };
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][6]||'').toUpperCase() === codigo) {
+      return { success: true, data: {
+        id: String(data[i][0]),
+        nombre: String(data[i][1]||''),
+        codigo: String(data[i][6]||''),
+      }};
+    }
+  }
+  return { success: false, error: 'Proveedor no encontrado' };
 }
 
 function toggleProveedor(body, user) {
@@ -397,11 +474,34 @@ function addColIfMissing(sheetName, colName) {
   Logger.log('Columna agregada: ' + sheetName + '.' + colName + ' en col ' + nextCol);
 }
 
+function migrarCodigosProveedores() {
+  var sheet = getSheet('Proveedores');
+  var data  = sheet.getDataRange().getValues();
+  if (data.length <= 1) { Logger.log('Proveedores vacía, nada que migrar.'); return; }
+  var existentes = [];
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][6]) existentes.push(String(data[i][6]).toUpperCase());
+  }
+  var asignados = 0;
+  for (var j = 1; j < data.length; j++) {
+    if (!data[j][0]) continue;
+    if (data[j][6]) continue;
+    var codigo = _generarCodigoProveedor(String(data[j][1]||''), existentes);
+    sheet.getRange(j+1, 7).setValue(codigo);
+    existentes.push(codigo);
+    asignados++;
+    Logger.log('Codigo asignado: ' + data[j][1] + ' → ' + codigo);
+  }
+  Logger.log('Migración códigos proveedores: ' + asignados + ' asignados.');
+}
+
 function migrateSheets() {
   addColIfMissing('Proveedores', 'Aplica_IVA');
   addColIfMissing('Proveedores', 'Frecuencia_Pago');
   addColIfMissing('Proveedores', 'Dia_Corte_Semanal');
+  addColIfMissing('Proveedores', 'Codigo');
   addColIfMissing('Usuarios',    'Permisos');
   addColIfMissing('PLANILLAS',   'IVA_Aplicado');
+  migrarCodigosProveedores();
   Logger.log('Migración completa.');
 }

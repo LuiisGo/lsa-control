@@ -17,6 +17,7 @@ interface Planilla {
 interface Proveedor {
   id: string; nombre: string; activo: boolean
   frecuenciaPago: string; diaCorte: number
+  codigo?: string
 }
 
 const quincenas = getQuincenasRecientes(6)
@@ -126,7 +127,12 @@ export default function PlanillasPage() {
             <div className="border-t border-b border-slate-200 py-4 space-y-2 text-sm text-left">
               <div className="flex justify-between">
                 <span>Proveedor:</span>
-                <span className="font-semibold">{reciboData.proveedorNombre}</span>
+                <span className="font-semibold">
+                  {(() => {
+                    const cod = proveedores.find(p => p.id === reciboData.proveedorId)?.codigo
+                    return cod ? `[${cod}] ${reciboData.proveedorNombre}` : reciboData.proveedorNombre
+                  })()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Litros entregados:</span>
@@ -303,6 +309,7 @@ export default function PlanillasPage() {
                 className="flex items-center justify-between p-3 border border-slate-100 rounded-xl bg-slate-50"
               >
                 <div>
+                  {p.codigo && <span className="mr-2 text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 tracking-wider">{p.codigo}</span>}
                   <span className="font-medium text-sm text-slate-800">{p.nombre}</span>
                   <span className="ml-2 text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">Semanal</span>
                 </div>
