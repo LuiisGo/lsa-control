@@ -48,9 +48,14 @@ export default function NuevaCargaPage() {
   async function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const base64 = await imageToBase64(file)
-    setFotoBase64(base64)
-    setFotoPreview(base64)
+    try {
+      const base64 = await imageToBase64(file)
+      setFotoBase64(base64)
+      setFotoPreview(base64)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error procesando la foto'
+      toast.error(msg)
+    }
   }
 
   function validate(): boolean {

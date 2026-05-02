@@ -4,7 +4,29 @@ import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
 import { isWebAuthnAvailable, webAuthnAuthenticate } from '@/lib/webauthn'
-import toast from 'react-hot-toast'
+
+// toast was previously imported but only signIn errors are used now
+
+const RATE_LIMIT_KEY    = 'login_rl_v1'
+const MAX_ATTEMPTS      = 5
+const LOCKOUT_MS        = 5 * 60 * 1000 // 5 minutos
+
+interface RateLimit { attempts: number; lockedUntil: number }
+
+function readRateLimit(): RateLimit {
+  if (typeof window === 'undefined') return { attempts: 0, lockedUntil: 0 }
+  try {
+    const raw = localStorage.getItem(RATE_LIMIT_KEY)
+    if (!raw) return { attempts: 0, lockedUntil: 0 }
+    return JSON.parse(raw) as RateLimit
+  } catch {
+    return { attempts: 0, lockedUntil: 0 }
+  }
+}
+
+function writeRateLimit(rl: RateLimit) {
+  try { localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(rl)) } catch { /* ignore */ }
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -15,13 +37,27 @@ export default function LoginPage() {
   const [biometricLoading, setBiometricLoading] = useState(false)
   const [webAuthnSupported, setWebAuthnSupported] = useState(false)
   const [error, setError] = useState('')
+  const [lockoutUntil, setLockoutUntil] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     isWebAuthnAvailable().then(setWebAuthnSupported)
+    const rl = readRateLimit()
+    if (rl.lockedUntil > Date.now()) setLockoutUntil(rl.lockedUntil)
   }, [])
+
+  useEffect(() => {
+    if (!lockoutUntil) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [lockoutUntil])
+
+  const remainingMs = Math.max(0, lockoutUntil - now)
+  const isLocked    = remainingMs > 0
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (isLocked) return
     if (!username || !password) {
       setError('Ingresá tu usuario y contraseña')
       return
@@ -38,8 +74,20 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError('Usuario o contraseña incorrectos')
+        const rl = readRateLimit()
+        const attempts = rl.attempts + 1
+        const next: RateLimit = attempts >= MAX_ATTEMPTS
+          ? { attempts: 0, lockedUntil: Date.now() + LOCKOUT_MS }
+          : { attempts, lockedUntil: 0 }
+        writeRateLimit(next)
+        if (next.lockedUntil) {
+          setLockoutUntil(next.lockedUntil)
+          setError('Demasiados intentos. Esperá 5 minutos antes de intentar de nuevo.')
+        } else {
+          setError(`Usuario o contraseña incorrectos (${MAX_ATTEMPTS - attempts} intento${MAX_ATTEMPTS - attempts === 1 ? '' : 's'} restante${MAX_ATTEMPTS - attempts === 1 ? '' : 's'})`)
+        }
       } else if (result?.ok) {
+        writeRateLimit({ attempts: 0, lockedUntil: 0 })
         const res = await fetch('/api/auth/session')
         const session = await res.json()
         const role = session?.user?.role
@@ -162,11 +210,13 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isLocked}
               className="btn-primary w-full text-base py-3.5 mt-1"
             >
               {loading ? (
                 <><Loader2 className="w-4 h-4 animate-spin" />Ingresando...</>
+              ) : isLocked ? (
+                `Bloqueado · ${Math.ceil(remainingMs / 1000)}s`
               ) : 'Ingresar'}
             </button>
           </form>

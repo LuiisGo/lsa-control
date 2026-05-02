@@ -56,7 +56,12 @@ export const authOptions: NextAuthOptions = {
         u.role = token.role as string
         u.apiToken = token.apiToken as string
         u.userId = token.userId as string
-        u.permisos = (token.permisos as string[]) ?? []
+        // Compat: si el JWT viene de una sesión anterior sin `permisos` o
+        // el arreglo está vacío, asumir todos los permisos (mismo comportamiento
+        // que `_parsePermisos` en Apps Script con celda vacía).
+        const rawPermisos = token.permisos as string[] | undefined
+        const allPermisos = ['cargas', 'medicion', 'envios', 'gastos', 'remanentes']
+        u.permisos = Array.isArray(rawPermisos) && rawPermisos.length > 0 ? rawPermisos : allPermisos
       }
       return session
     },
@@ -74,5 +79,11 @@ export const authOptions: NextAuthOptions = {
     strategy: 'jwt',
     maxAge: 8 * 60 * 60, // 8 horas
   },
-  secret: process.env.NEXTAUTH_SECRET ?? 'lsa-control-fallback-secret-futura-2026',
+  secret: process.env.NEXTAUTH_SECRET,
+}
+
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error(
+    'NEXTAUTH_SECRET no está configurado. Define la variable de entorno antes de hacer deploy.'
+  )
 }

@@ -2,7 +2,16 @@
 // Code.gs — Entry point del Web App LSA Control (Fase 1 + Fase 2)
 // ============================================================
 
-var SPREADSHEET_ID = '1R6IXVYnA9P30zHUwnHCMbyXCIxR5ReMCgmXcOe1k82c';
+// SPREADSHEET_ID se lee de Script Properties (equivalente .env en Apps Script).
+// Configura en: Project Settings → Script Properties → SPREADSHEET_ID
+// El fallback solo aplica para la hoja original de desarrollo.
+var SPREADSHEET_ID = (function() {
+  try {
+    var prop = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+    if (prop) return prop;
+  } catch (e) {}
+  return '1R6IXVYnA9P30zHUwnHCMbyXCIxR5ReMCgmXcOe1k82c';
+})();
 
 var HOJAS = {
   // Fase 1
@@ -151,7 +160,8 @@ function doPost(e) {
         return respond({ success: false, error: 'Accion no reconocida: ' + action });
     }
   } catch (err) {
-    return respond({ success: false, error: 'Error interno: ' + err.message });
+    Logger.log('[doPost] ' + (err && err.stack ? err.stack : err));
+    return respond({ success: false, error: 'Error procesando la solicitud' });
   }
 }
 
@@ -201,11 +211,19 @@ function generarId() {
 }
 
 function generateToken() {
-  var raw   = Date.now().toString() + Math.random().toString();
-  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw);
+  // Utilities.generateKey uses a CSPRNG (CryptoJS-backed). 32 random bytes
+  // are encoded as base64url and combined with a SHA-256 digest of a UUID
+  // to produce a 64-char opaque token without predictable Math.random output.
+  var random = Utilities.generateKey(32);
+  var unique = Utilities.getUuid();
+  var bytes  = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    random + ':' + unique + ':' + Date.now(),
+    Utilities.Charset.UTF_8
+  );
   return bytes.map(function(b) {
     return ('0' + (b & 0xff).toString(16)).slice(-2);
-  }).join('').substring(0, 48);
+  }).join('');
 }
 
 function dateToString(d) {

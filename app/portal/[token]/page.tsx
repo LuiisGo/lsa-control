@@ -1,5 +1,5 @@
 'use client'
-import { useState, use, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, Droplets, LogOut, Loader2 } from 'lucide-react'
 import { formatQ } from '@/lib/utils'
 
@@ -134,8 +134,8 @@ function PlanillaCard({ planilla }: { planilla: PlanillaResumen }) {
 
 // ── Main page ─────────────────────────────────────────────────
 
-export default function PortalPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = use(params)
+export default function PortalPage({ params }: { params: { token: string } }) {
+  const { token } = params
 
   const [screen, setScreen] = useState<'login' | 'data'>('login')
   const [codigo, setCodigo] = useState('')

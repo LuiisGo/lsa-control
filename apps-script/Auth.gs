@@ -1,10 +1,13 @@
 // ============================================================
-// Auth.gs — Login y validación de token (username-based)
+// Auth.gs — Login y validación de token (con hashing + expiración)
 // ============================================================
+// Cols Usuarios: 0=ID 1=Nombre 2=Username 3=Password(hash) 4=Role
+//                5=Activo 6=ApiToken 7=credentialId 8=publicKey
+//                9=Permisos 10=Token_Expira
 
 function handleLogin(body) {
   var username = String(body.username || body.email || '').trim();
-  var password  = String(body.password  || '').trim();
+  var password = String(body.password || '').trim();
 
   if (!username || !password) {
     return { success: false, error: 'Usuario y contraseña requeridos' };
@@ -12,34 +15,48 @@ function handleLogin(body) {
 
   var sheet = getSheet('Usuarios');
   var data  = sheet.getDataRange().getValues();
+  var hashed = hashPassword(password);
 
-  // Cols: 0=id 1=nombre 2=username 3=password 4=role 5=activo 6=apiToken 7=credentialId 8=publicKey 9=permisos
   for (var i = 1; i < data.length; i++) {
     var row     = data[i];
     var rowUser = String(row[2] || '').trim();
     var rowPass = String(row[3] || '').trim();
     var activo  = row[5];
 
-    if (rowUser === username && rowPass === password &&
-        activo !== false && activo !== 'false' && activo !== 0) {
-      var token = generateToken();
-      sheet.getRange(i + 1, 7).setValue(token);
+    if (rowUser !== username) continue;
+    if (activo === false || activo === 'false' || activo === 0) continue;
 
-      var rawPermisos = String(row[9] || '');
-      var permisos    = _parsePermisos(rawPermisos);
-
-      return {
-        success: true,
-        data: {
-          token:  token,
-          userId: String(row[0]),
-          nombre: String(row[1]),
-          email:  rowUser,   // kept for next-auth compatibility
-          role:   String(row[4] || 'empleado'),
-          permisos: permisos,
-        }
-      };
+    // Match contra hash. Si el sheet aún tiene texto plano (legacy pre-migración)
+    // se compara directo y se promueve a hash en el mismo login.
+    var matched = false;
+    if (isHashedPassword(rowPass)) {
+      matched = (rowPass === hashed);
+    } else if (rowPass !== '' && rowPass === password) {
+      matched = true;
+      sheet.getRange(i + 1, 4).setValue(hashed); // upgrade in-place
     }
+    if (!matched) break;
+
+    var token   = generateToken();
+    var expira  = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    sheet.getRange(i + 1, 7).setValue(token);
+    _setTokenExpira(sheet, i + 1, expira);
+
+    var rawPermisos = String(row[9] || '');
+    var permisos    = _parsePermisos(rawPermisos);
+
+    return {
+      success: true,
+      data: {
+        token:    token,
+        userId:   String(row[0]),
+        nombre:   String(row[1]),
+        email:    rowUser,
+        role:     String(row[4] || 'empleado'),
+        permisos: permisos,
+        expira:   expira,
+      }
+    };
   }
 
   return { success: false, error: 'Usuario o contraseña incorrectos' };
@@ -58,16 +75,28 @@ function validateToken(token) {
     var stored = String(row[6] || '').trim();
     var activo = row[5];
 
-    if (stored && stored === t && activo !== false && activo !== 'false' && activo !== 0) {
-      var rawPermisos = String(row[9] || '');
-      return {
-        id:       String(row[0]),
-        nombre:   String(row[1]),
-        username: String(row[2]),
-        role:     String(row[4] || 'empleado'),
-        permisos: _parsePermisos(rawPermisos),
-      };
+    if (!stored || stored !== t) continue;
+    if (activo === false || activo === 'false' || activo === 0) continue;
+
+    // Verificar expiración
+    var rawExpira = row[10];
+    if (rawExpira) {
+      var expiraMs = new Date(rawExpira).getTime();
+      if (!isNaN(expiraMs) && Date.now() > expiraMs) {
+        // Token expirado: invalidar y rechazar
+        sheet.getRange(i + 1, 7).setValue('');
+        return null;
+      }
     }
+
+    var rawPermisos = String(row[9] || '');
+    return {
+      id:       String(row[0]),
+      nombre:   String(row[1]),
+      username: String(row[2]),
+      role:     String(row[4] || 'empleado'),
+      permisos: _parsePermisos(rawPermisos),
+    };
   }
   return null;
 }
@@ -82,6 +111,7 @@ function doLogout(body) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][6] || '').trim() === token) {
       sheet.getRange(i + 1, 7).setValue('');
+      _setTokenExpira(sheet, i + 1, '');
       return { success: true };
     }
   }
@@ -102,12 +132,14 @@ function verifyWebAuthn(body) {
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    var storedCred = String(row[7] || '').trim(); // col 7 = credentialId (Fase 2 extension)
+    var storedCred = String(row[7] || '').trim();
     var activo = row[5];
 
     if (storedCred === credentialId && activo !== false && activo !== 'false' && activo !== 0) {
-      var token = generateToken();
+      var token  = generateToken();
+      var expira = new Date(Date.now() + SESSION_TTL_MS).toISOString();
       sheet.getRange(i + 1, 7).setValue(token);
+      _setTokenExpira(sheet, i + 1, expira);
       return {
         success: true,
         data: {
@@ -116,6 +148,7 @@ function verifyWebAuthn(body) {
           nombre: String(row[1]),
           email:  String(row[2]),
           role:   String(row[4] || 'empleado'),
+          expira: expira,
         }
       };
     }
@@ -136,13 +169,20 @@ function saveWebAuthnCredential(body) {
 
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === user.id) {
-      // Ensure columns exist (extend if needed)
       sheet.getRange(i + 1, 8).setValue(credentialId);
       sheet.getRange(i + 1, 9).setValue(publicKey);
       return { success: true };
     }
   }
   return { success: false, error: 'Usuario no encontrado' };
+}
+
+// ── Helper: setea Token_Expira col 11 (1-indexed) sin romper si la columna no existe ─
+
+function _setTokenExpira(sheet, rowIdx, value) {
+  try {
+    sheet.getRange(rowIdx, 11).setValue(value);
+  } catch (e) { /* hoja antigua sin la columna; ignorar */ }
 }
 
 // ── PATCH: PERMISOS ───────────────────────────────────────────
@@ -165,4 +205,21 @@ function _parsePermisos(rawValue) {
   } catch(e) {
     return TODOS_PERMISOS;
   }
+}
+
+// ── MIGRACIÓN: hashea contraseñas existentes en texto plano ─
+
+function migrarPasswords() {
+  var sheet = getSheet('Usuarios');
+  var data  = sheet.getDataRange().getValues();
+  var migrados = 0;
+  for (var i = 1; i < data.length; i++) {
+    var pwd = String(data[i][3] || '');
+    if (!pwd) continue;
+    if (isHashedPassword(pwd)) continue; // ya migrado
+    sheet.getRange(i + 1, 4).setValue(hashPassword(pwd));
+    migrados++;
+  }
+  Logger.log('migrarPasswords: ' + migrados + ' contraseñas hasheadas.');
+  return migrados;
 }

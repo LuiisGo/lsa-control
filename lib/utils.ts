@@ -159,12 +159,71 @@ export function downloadXLSX(
   })
 }
 
-export function imageToBase64(file: File): Promise<string> {
+const ALLOWED_IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp']
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5MB
+
+export class ImageValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ImageValidationError'
+  }
+}
+
+/**
+ * Convierte un archivo de imagen a base64 con validación.
+ * - Rechaza tipos MIME no permitidos
+ * - Rechaza archivos > 5MB
+ * - Comprime/redimensiona a 1280px de ancho si supera 1MB
+ */
+export async function imageToBase64(file: File): Promise<string> {
+  if (!ALLOWED_IMAGE_MIME.includes(file.type)) {
+    throw new ImageValidationError('Solo se permiten imágenes JPG, PNG o WEBP')
+  }
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new ImageValidationError('La foto no puede superar 5MB')
+  }
+
+  // Si pesa más de 1MB, redimensionar para no saturar Apps Script
+  if (file.size > 1024 * 1024) {
+    try {
+      return await compressImage(file)
+    } catch {
+      // si falla la compresión, caer al flujo normal — la validación de 5MB ya pasó
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
+    reader.onerror = () => reject(new Error('Error leyendo el archivo'))
     reader.readAsDataURL(file)
+  })
+}
+
+function compressImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      const maxWidth = 1280
+      const ratio = img.width > maxWidth ? maxWidth / img.width : 1
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * ratio)
+      canvas.height = Math.round(img.height * ratio)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        URL.revokeObjectURL(url)
+        return reject(new Error('Canvas no disponible'))
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      URL.revokeObjectURL(url)
+      resolve(canvas.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      reject(new Error('Error procesando la imagen'))
+    }
+    img.src = url
   })
 }
 

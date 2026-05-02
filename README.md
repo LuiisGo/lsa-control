@@ -150,3 +150,42 @@ apiCall('acción', { ...datos }, token)
 ```
 
 Nunca se llama al Apps Script directamente desde los componentes — todo pasa por `lib/api.ts`.
+
+## Seguridad
+
+Para detalles completos ver [SECURITY.md](./SECURITY.md).
+
+### Cómo funciona la autenticación
+
+1. Usuario envía username/password al login.
+2. `next-auth` (CredentialsProvider) llama a Apps Script `handleLogin`.
+3. Apps Script compara la contraseña hasheada (SHA-256 + salt) y devuelve un
+   token de sesión con TTL 8h.
+4. `next-auth` guarda el token dentro de un JWT firmado con `NEXTAUTH_SECRET`,
+   en una cookie `httpOnly` `sameSite=lax`.
+5. Cada request al backend va por `/api/proxy` (server-side), que reenvía a
+   Apps Script. El backend valida el token + expiración en cada llamada.
+
+### Si se sospecha que un token fue comprometido
+
+Abrir el Sheet `Usuarios` y borrar las celdas `ApiToken` (col 7) y
+`Token_Expira` (col 11) de la fila correspondiente. La sesión queda invalidada
+inmediatamente.
+
+### Si NEXTAUTH_SECRET pudo haberse leakeado
+
+1. Generar nuevo: `openssl rand -base64 32`.
+2. Actualizar en Netlify → Environment variables.
+3. Trigger redeploy. Esto invalida todas las sesiones activas (todos deben
+   loguearse de nuevo).
+
+### Regenerar acceso del portal de proveedores
+
+Como admin, en la sección de proveedores → portal → click en "Generar acceso".
+Reescribe `Codigo_Acceso` y `Link_Token` y bloquea el código anterior.
+
+### Variables de entorno requeridas
+
+Ver `.env.example`. Crítica: **`NEXTAUTH_SECRET`** debe estar presente — el
+build falla si falta. Las credenciales de Apps Script se configuran en
+**Project Settings → Script Properties** (`SPREADSHEET_ID`, `PASSWORD_SALT`).

@@ -26,7 +26,7 @@ function initSheets() {
   var usuSheet = ss.getSheetByName('Usuarios');
   if (!usuSheet) {
     usuSheet = ss.insertSheet('Usuarios');
-    usuSheet.appendRow(['ID','Nombre','Username','Password','Role','Activo','ApiToken']);
+    usuSheet.appendRow(['ID','Nombre','Username','Password','Role','Activo','ApiToken','CredentialId','PublicKey','Permisos','Token_Expira']);
   }
 
   // Fase 2
@@ -41,12 +41,25 @@ function initSheets() {
   ensureSheet('ALERTAS_CONFIG',     ['ID','Tipo','Descripcion','Umbral','Emails','Activo']);
   ensureSheet('ACCESOS_PROVEEDORES',['ID','Proveedor_ID','Proveedor_Nombre','Codigo_Acceso','Link_Token','Activo']);
 
-  // Initial users
+  // Initial users (passwords ya hasheadas — nunca guardar texto plano)
   var uData = usuSheet.getDataRange().getValues();
   if (uData.length <= 1) {
-    usuSheet.appendRow([generateId(),'Administrador LSA','AdminLSA','Lecheria2026','admin',true,'']);
-    usuSheet.appendRow([generateId(),'Empleado Acopio','Acopio1','LSA2026','empleado',true,'']);
+    var defaultAdminPwd = hashPassword('Lecheria2026');
+    var defaultEmpPwd   = hashPassword('LSA2026');
+    var allPermisos     = JSON.stringify(['cargas','medicion','envios','gastos','remanentes']);
+    usuSheet.appendRow([generateId(),'Administrador LSA','AdminLSA',defaultAdminPwd,'admin',true,'','','',allPermisos,'']);
+    usuSheet.appendRow([generateId(),'Empleado Acopio','Acopio1',defaultEmpPwd,'empleado',true,'','','',allPermisos,'']);
   }
+
+  // Proteger hoja USUARIOS (no editable manualmente desde la UI de Sheets)
+  try {
+    var existingProtections = usuSheet.getProtections(SpreadsheetApp.ProtectionType.SHEET);
+    if (existingProtections.length === 0) {
+      usuSheet.protect()
+        .setDescription('Protegida por LSA Control — no editar manualmente')
+        .setWarningOnly(true);
+    }
+  } catch (e) { /* ignorar si no hay permisos */ }
 
   // Initial proveedores
   var provSheet = ss.getSheetByName('Proveedores');
@@ -95,27 +108,42 @@ function getCargas(body, user) {
 function saveCarga(body, user) {
   if (!tienePermiso(user, 'cargas')) return { success: false, error: 'Sin permiso para registrar cargas' };
   var t1 = num(body.litros_t1), t2 = num(body.litros_t2);
-  if (t1 + t2 <= 0) return { success: false, error: 'Total litros debe ser > 0' };
+  if (t1 < 0 || t2 < 0)       return { success: false, error: 'Litros no pueden ser negativos' };
+  if (t1 + t2 <= 0)           return { success: false, error: 'Total litros debe ser > 0' };
+  var proveedor = String(body.proveedor || '').trim();
+  if (!proveedor)             return { success: false, error: 'Proveedor requerido' };
+
   var sheet = getSheet('Cargas');
   var id    = generateId();
   var fecha = body.fecha || getToday();
   var hora  = body.hora  || getNow();
-  sheet.appendRow([id, fecha, hora, String(body.proveedor||''), t1, t2, t1+t2, String(body.foto_url||'')]);
+  sheet.appendRow([
+    id, fecha, hora, sanitizarValor(proveedor),
+    t1, t2, t1+t2, sanitizarValor(body.foto_url||'')
+  ]);
+  registrarLog(user, 'CREATE_CARGA', 'Cargas', id, '', { fecha: fecha, proveedor: proveedor, total: t1+t2 });
   return { success: true, data: { id: id } };
 }
 
 function editarCarga(body, user) {
+  if (!tienePermiso(user, 'cargas') && user.role !== 'admin') {
+    return { success: false, error: 'Sin permisos para editar cargas' };
+  }
   var sheet = getSheet('Cargas');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(body.id)) {
       var t1   = num(body.litros_t1 !== undefined ? body.litros_t1 : data[i][4]);
       var t2   = num(body.litros_t2 !== undefined ? body.litros_t2 : data[i][5]);
-      var prov = body.proveedor !== undefined ? String(body.proveedor) : String(data[i][3]);
-      sheet.getRange(i+1,4).setValue(prov);
+      if (t1 < 0 || t2 < 0) return { success: false, error: 'Litros no pueden ser negativos' };
+      var prov = body.proveedor !== undefined ? String(body.proveedor).trim() : String(data[i][3]);
+      if (!prov) return { success: false, error: 'Proveedor requerido' };
+      var anterior = { proveedor: String(data[i][3]), t1: num(data[i][4]), t2: num(data[i][5]), total: num(data[i][6]) };
+      sheet.getRange(i+1,4).setValue(sanitizarValor(prov));
       sheet.getRange(i+1,5).setValue(t1);
       sheet.getRange(i+1,6).setValue(t2);
       sheet.getRange(i+1,7).setValue(t1+t2);
+      registrarLog(user, 'UPDATE_CARGA', 'Cargas', body.id, anterior, { proveedor: prov, t1: t1, t2: t2, total: t1+t2 });
       return { success: true };
     }
   }
@@ -123,10 +151,16 @@ function editarCarga(body, user) {
 }
 
 function deleteCarga(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
   var sheet = getSheet('Cargas');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(body.id)) { sheet.deleteRow(i+1); return { success: true }; }
+    if (String(data[i][0]) === String(body.id)) {
+      var anterior = { fecha: dateToString(data[i][1]), proveedor: String(data[i][3]), total: num(data[i][6]) };
+      sheet.deleteRow(i+1);
+      registrarLog(user, 'DELETE_CARGA', 'Cargas', body.id, anterior, '');
+      return { success: true };
+    }
   }
   return { success: false, error: 'Carga no encontrada' };
 }
@@ -207,7 +241,12 @@ function deleteMedicion(body, user) {
   var sheet = getSheet('Mediciones');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
-    if (dateToString(data[i][1]) === fecha) { sheet.deleteRow(i+1); return { success: true }; }
+    if (dateToString(data[i][1]) === fecha) {
+      var anterior = { fecha: fecha, total_real: num(data[i][4]) };
+      sheet.deleteRow(i+1);
+      registrarLog(user, 'DELETE_MEDICION', 'Mediciones', '', anterior, '');
+      return { success: true };
+    }
   }
   return { success: false, error: 'Medicion no encontrada' };
 }
@@ -252,6 +291,7 @@ function _generarCodigoProveedor(nombre, existentes) {
 }
 
 function saveProveedor(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
   var nombre = String(body.nombre||'').trim();
   if (!nombre) return { success: false, error: 'Nombre requerido' };
   var aplicaIVA  = body.aplicaIVA === true || body.aplicaIVA === 'true' || body.aplicaIVA === 1;
@@ -327,6 +367,7 @@ function getProveedorPorCodigo(body, user) {
 }
 
 function toggleProveedor(body, user) {
+  if (user.role !== 'admin') return { success: false, error: 'Sin permisos' };
   var sheet = getSheet('Proveedores');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -372,26 +413,47 @@ function saveUsuario(body, user) {
   var password = String(body.password||'').trim();
   var nombre   = String(body.nombre||username).trim();
   var role     = String(body.role||'empleado').trim();
-  if (!username || !password) return { success: false, error: 'Usuario y contraseña requeridos' };
+
+  if (!username) return { success: false, error: 'Usuario requerido' };
+  if (role !== 'admin' && role !== 'empleado') return { success: false, error: 'Role inválido' };
+
+  // En edición la password es opcional. En creación es obligatoria y mínimo 6 chars.
+  if (!body.id) {
+    if (!password)              return { success: false, error: 'Contraseña requerida' };
+    if (password.length < 6)    return { success: false, error: 'Contraseña mínimo 6 caracteres' };
+  } else if (password && password.length < 6) {
+    return { success: false, error: 'Contraseña mínimo 6 caracteres' };
+  }
+
+  // Verificar username duplicado (siempre, también en edit)
+  for (var k = 1; k < data.length; k++) {
+    if (body.id && String(data[k][0]) === String(body.id)) continue; // permitir mismo registro
+    if (String(data[k][2]).toLowerCase() === username.toLowerCase()) {
+      return { success: false, error: 'Usuario ya existe' };
+    }
+  }
+
   if (body.id) {
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(body.id)) {
-        sheet.getRange(i+1,2).setValue(nombre);
-        sheet.getRange(i+1,3).setValue(username);
-        if (password) sheet.getRange(i+1,4).setValue(password);
+        var prev = { username: String(data[i][2]), role: String(data[i][4]), passwordChanged: !!password };
+        sheet.getRange(i+1,2).setValue(sanitizarValor(nombre));
+        sheet.getRange(i+1,3).setValue(sanitizarValor(username));
+        if (password) sheet.getRange(i+1,4).setValue(hashPassword(password));
         sheet.getRange(i+1,5).setValue(role);
         if (body.permisos) sheet.getRange(i+1,10).setValue(JSON.stringify(body.permisos));
+        registrarLog(user, 'UPDATE_USUARIO', 'Usuarios', body.id, prev, { username: username, role: role, passwordChanged: !!password });
         return { success: true };
       }
     }
+    return { success: false, error: 'Usuario no encontrado' };
   }
-  for (var j = 1; j < data.length; j++) {
-    if (String(data[j][2]).toLowerCase() === username.toLowerCase()) return { success: false, error: 'Usuario ya existe' };
-  }
+
   var id = generateId();
   var permisosJson = body.permisos ? JSON.stringify(body.permisos) : JSON.stringify(['cargas','medicion','envios','gastos','remanentes']);
-  // 10 cols: ID Nombre Username Password Role Activo ApiToken credentialId publicKey Permisos
-  sheet.appendRow([id, nombre, username, password, role, true, '', '', '', permisosJson]);
+  // 11 cols: ID Nombre Username Password(hash) Role Activo ApiToken credentialId publicKey Permisos Token_Expira
+  sheet.appendRow([id, sanitizarValor(nombre), sanitizarValor(username), hashPassword(password), role, true, '', '', '', permisosJson, '']);
+  registrarLog(user, 'CREATE_USUARIO', 'Usuarios', id, '', { username: username, role: role });
   return { success: true, data: { id: id } };
 }
 
@@ -500,8 +562,12 @@ function migrateSheets() {
   addColIfMissing('Proveedores', 'Frecuencia_Pago');
   addColIfMissing('Proveedores', 'Dia_Corte_Semanal');
   addColIfMissing('Proveedores', 'Codigo');
+  addColIfMissing('Usuarios',    'CredentialId');
+  addColIfMissing('Usuarios',    'PublicKey');
   addColIfMissing('Usuarios',    'Permisos');
+  addColIfMissing('Usuarios',    'Token_Expira');
   addColIfMissing('PLANILLAS',   'IVA_Aplicado');
   migrarCodigosProveedores();
+  migrarPasswords();              // hashea contraseñas legacy en texto plano
   Logger.log('Migración completa.');
 }

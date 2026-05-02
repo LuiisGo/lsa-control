@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Receipt, Camera } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { savePendingGasto } from '@/lib/offline'
+import { imageToBase64, ImageValidationError } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
 interface Categoria { id: string; nombre: string; activo: boolean }
@@ -38,16 +39,17 @@ export default function GastoPage() {
     setCategoriaNombre(c?.nombre ?? '')
   }
 
-  function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const b64 = ev.target?.result as string
+    try {
+      const b64 = await imageToBase64(file)
       setFotoBase64(b64)
       setFotoPreview(b64)
+    } catch (err) {
+      const msg = err instanceof ImageValidationError ? err.message : 'Error procesando la foto'
+      toast.error(msg)
     }
-    reader.readAsDataURL(file)
   }
 
   async function handleSubmit(e: React.FormEvent) {

@@ -61,3 +61,57 @@ function calcularQuincenaAnterior(fecha) {
 function formatQ(n) {
   return 'Q ' + Number(n).toFixed(2);
 }
+
+// ============================================================
+// SECURITY HELPERS
+// ============================================================
+
+// PASSWORD_SALT se lee de Script Properties (equivalente .env en Apps Script).
+// Configura un valor aleatorio en: Project Settings → Script Properties → PASSWORD_SALT
+// Si nunca se rotó, el fallback se usa para no romper migraciones legacy.
+function _getPasswordSalt() {
+  try {
+    var prop = PropertiesService.getScriptProperties().getProperty('PASSWORD_SALT');
+    if (prop) return prop;
+  } catch (e) {}
+  return 'lsa-control-2026-pwd-salt-v1';
+}
+
+var SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 horas
+
+/**
+ * SHA-256 hash con salt. Usado para guardar contraseñas en Sheets.
+ * Las contraseñas en texto plano nunca se guardan ni se loguean.
+ */
+function hashPassword(plain) {
+  var raw   = String(plain || '') + ':' + _getPasswordSalt();
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return bytes.map(function(b) {
+    return ('0' + (b & 0xff).toString(16)).slice(-2);
+  }).join('');
+}
+
+/**
+ * Marca de un hash. Las migraciones convierten contraseñas legacy → hash.
+ */
+function isHashedPassword(value) {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+}
+
+/**
+ * Sanitiza valores para evitar formula injection en Sheets.
+ * Anteponer comilla simple si empieza con =, +, -, @ neutraliza la fórmula.
+ */
+function sanitizarValor(v) {
+  if (v === null || v === undefined) return '';
+  var s = String(v);
+  if (s.length > 0 && /^[=+\-@]/.test(s)) return "'" + s;
+  return s;
+}
+
+/**
+ * Validador de email simple (sin RFC completo).
+ */
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
