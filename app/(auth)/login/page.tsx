@@ -170,7 +170,6 @@ export default function LoginPage() {
                 value={username}
                 onChange={e => { setUsername(e.target.value); setError('') }}
                 className={`input ${error ? 'input-error' : ''}`}
-                placeholder="Ej: AdminLSA"
                 disabled={loading}
               />
             </div>
@@ -186,7 +185,6 @@ export default function LoginPage() {
                   value={password}
                   onChange={e => { setPassword(e.target.value); setError('') }}
                   className={`input pr-12 ${error ? 'input-error' : ''}`}
-                  placeholder="••••••••"
                   disabled={loading}
                 />
                 <button

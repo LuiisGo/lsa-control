@@ -223,3 +223,36 @@ function migrarPasswords() {
   Logger.log('migrarPasswords: ' + migrados + ' contraseñas hasheadas.');
   return migrados;
 }
+
+// ── RESCATE: resetear contraseña de un usuario desde el editor ─
+// Uso: editar el username y la pwd nueva, seleccionar la función en
+// el dropdown, click Run. Útil cuando se rota PASSWORD_SALT y los
+// hashes viejos quedan desfasados.
+
+function resetPasswordUsuario(username, nuevaPassword) {
+  var u = String(username || '').trim();
+  var p = String(nuevaPassword || '').trim();
+  if (!u || !p) { Logger.log('Usage: resetPasswordUsuario("AdminLSA","Lecheria2026")'); return; }
+
+  var sheet = getSheet('Usuarios');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][2] || '').trim().toLowerCase() === u.toLowerCase()) {
+      var h = hashPassword(p);
+      sheet.getRange(i + 1, 4).setValue(h);
+      sheet.getRange(i + 1, 7).setValue('');       // invalidar token
+      _setTokenExpira(sheet, i + 1, '');
+      Logger.log('Password reseteado para ' + u + '. Hash: ' + h);
+      return h;
+    }
+  }
+  Logger.log('Usuario no encontrado: ' + u);
+}
+
+function resetAdmin() {
+  return resetPasswordUsuario('AdminLSA', 'Lecheria2026');
+}
+
+function resetEmpleado() {
+  return resetPasswordUsuario('Acopio1', 'LSA2026');
+}
