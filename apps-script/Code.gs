@@ -211,14 +211,13 @@ function generarId() {
 }
 
 function generateToken() {
-  // Utilities.generateKey uses a CSPRNG (CryptoJS-backed). 32 random bytes
-  // are encoded as base64url and combined with a SHA-256 digest of a UUID
-  // to produce a 64-char opaque token without predictable Math.random output.
-  var random = Utilities.generateKey(32);
-  var unique = Utilities.getUuid();
-  var bytes  = Utilities.computeDigest(
+  // Apps Script no expone una CSPRNG nativa. Combinamos 2 UUIDs (cada uno
+  // 128 bits de entropía del kernel), el timestamp y Math.random() como
+  // material extra; el SHA-256 final produce un token opaco de 64 chars.
+  var seed = Utilities.getUuid() + ':' + Utilities.getUuid() + ':' + Date.now() + ':' + Math.random();
+  var bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
-    random + ':' + unique + ':' + Date.now(),
+    seed,
     Utilities.Charset.UTF_8
   );
   return bytes.map(function(b) {

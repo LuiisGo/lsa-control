@@ -119,7 +119,10 @@ function doLogout(body) {
 }
 
 function getChallenge(body) {
-  var challenge = Utilities.base64Encode(Utilities.generateKey(32));
+  // 32 bytes derivados de SHA-256(2 UUIDs + timestamp) → base64
+  var seed = Utilities.getUuid() + ':' + Utilities.getUuid() + ':' + Date.now();
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed, Utilities.Charset.UTF_8);
+  var challenge = Utilities.base64Encode(bytes);
   return { success: true, data: { challenge: challenge } };
 }
 
