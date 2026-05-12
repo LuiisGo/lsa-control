@@ -7,6 +7,17 @@ export interface ApiResponse<T = unknown> {
   message?: string
 }
 
+export function buildApiRequestBody(
+  action: string,
+  data?: Record<string, unknown>,
+  token?: string,
+  isBrowser = typeof window !== 'undefined'
+): Record<string, unknown> {
+  const body: Record<string, unknown> = { action, ...data }
+  if (token && !isBrowser) body.token = token
+  return body
+}
+
 /**
  * Central API call function.
  *
@@ -22,11 +33,10 @@ export async function apiCall<T = unknown>(
   token?: string
 ): Promise<ApiResponse<T>> {
   try {
-    const body: Record<string, unknown> = { action, ...data }
-    if (token) body.token = token
-
     // Browser → proxy | Server → Apps Script directo
-    const url = typeof window !== 'undefined' ? '/api/proxy' : API_URL
+    const isBrowser = typeof window !== 'undefined'
+    const url = isBrowser ? '/api/proxy' : API_URL
+    const body = buildApiRequestBody(action, data, token, isBrowser)
 
     const res = await fetch(url, {
       method: 'POST',

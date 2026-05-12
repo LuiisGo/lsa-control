@@ -1,9 +1,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { Plus, Loader2, Users, ToggleLeft, ToggleRight, Fingerprint, Eye, EyeOff, X, AlertCircle, Trash2 } from 'lucide-react'
+import { Plus, Loader2, Users, ToggleLeft, ToggleRight, Eye, EyeOff, X, AlertCircle, Trash2 } from 'lucide-react'
 import { apiCall } from '@/lib/api'
-import { webAuthnRegister, isWebAuthnAvailable } from '@/lib/webauthn'
 import { ModalConfirmar } from '@/components/ModalConfirmar'
 import toast from 'react-hot-toast'
 
@@ -32,8 +31,6 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
-  const [registering, setRegistering] = useState<string | null>(null)
-  const [webAuthnAvail, setWebAuthnAvail] = useState(false)
   const [deleteUsuario, setDeleteUsuario] = useState<Usuario | null>(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -44,7 +41,6 @@ export default function UsuariosPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    isWebAuthnAvailable().then(setWebAuthnAvail)
     load()
   }, [token])
 
@@ -72,15 +68,6 @@ export default function UsuariosPage() {
       if (res.success) { toast.success('Usuario eliminado'); setDeleteUsuario(null); load() }
       else toast.error(res.error ?? 'Error al eliminar')
     } finally { setDeleting(false) }
-  }
-
-  async function handleRegisterBiometric(u: Usuario) {
-    setRegistering(u.id)
-    try {
-      const ok = await webAuthnRegister(u.id, u.nombre, u.username)
-      if (ok) toast.success(`Biométrico registrado para ${u.nombre}`)
-      else toast.error('No se pudo registrar el biométrico')
-    } finally { setRegistering(null) }
   }
 
   function validateForm(): boolean {
@@ -188,21 +175,6 @@ export default function UsuariosPage() {
                             <ToggleLeft className="w-5 h-5 text-slate-400" />
                           )}
                         </button>
-                        {webAuthnAvail && (
-                          <button
-                            onClick={() => handleRegisterBiometric(u)}
-                            disabled={registering === u.id}
-                            className="btn-ghost btn-icon"
-                            title="Registrar biométrico"
-                            aria-label="Registrar biométrico"
-                          >
-                            {registering === u.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Fingerprint className="w-4 h-4 text-primary-500" />
-                            )}
-                          </button>
-                        )}
                         <button
                           onClick={() => setDeleteUsuario(u)}
                           className="btn-ghost btn-icon hover:bg-danger-50"

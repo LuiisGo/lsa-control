@@ -28,6 +28,8 @@ export default function EnvioPage() {
   interface ConfirmacionData {
     compradorNombre: string
     litros: number
+    precioLitro?: number
+    montoTotal?: number
     totalCargaDia: number
     totalEnviadoDia: number
     resto: number
@@ -75,7 +77,7 @@ export default function EnvioPage() {
     try {
       const res = await apiCall<{
         id: string; totalCargaDia: number; totalEnviadoDia: number
-        resto: number; advertencia?: string
+        resto: number; advertencia?: string; precioLitro: number; montoTotal: number
       }>('saveEnvio', {
         compradorId,
         compradorNombre,
@@ -87,13 +89,19 @@ export default function EnvioPage() {
         setConfirmacion({
           compradorNombre,
           litros: litrosNum,
+          precioLitro:     res.data.precioLitro,
+          montoTotal:      res.data.montoTotal,
           totalCargaDia:   res.data.totalCargaDia,
           totalEnviadoDia: res.data.totalEnviadoDia,
           resto:           res.data.resto,
           advertencia:     res.data.advertencia,
         })
       } else {
-        throw new Error(res.error)
+        if (navigator.onLine) {
+          toast.error(res.error || 'No se pudo registrar el envío')
+          return
+        }
+        throw new Error(res.error || 'Sin conexión')
       }
     } catch {
       // offline fallback
@@ -115,6 +123,12 @@ export default function EnvioPage() {
           <p className="text-sm text-green-700">
             <strong>{confirmacion.litros.toFixed(1)} L</strong> a {confirmacion.compradorNombre}
           </p>
+          {confirmacion.montoTotal !== undefined && (
+            <p className="text-sm text-green-700">
+              Total calculado: <strong>Q {confirmacion.montoTotal.toFixed(2)}</strong>
+              {confirmacion.precioLitro !== undefined && ` (Q ${confirmacion.precioLitro.toFixed(4)} por litro)`}
+            </p>
+          )}
           {confirmacion.offline ? (
             <p className="text-sm text-slate-500 italic">Sin conexión — resto no disponible</p>
           ) : (

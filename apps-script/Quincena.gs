@@ -20,11 +20,11 @@ function getDashboardHoy(user) {
       totalT2:  Math.round(totalT2 * 100) / 100,
       total:    Math.round((totalT1 + totalT2) * 100) / 100,
       medicion: med ? {
-        litrosRealT1:    num(med.litrosRealT1 || med.litros_real_t1),
-        litrosRealT2:    num(med.litrosRealT2 || med.litros_real_t2),
-        totalReal:       num(med.totalReal    || med.total_real),
-        diferenciaLitros:num(med.diferenciaLitros || med.diferencia_litros),
-        diferenciaPct:   num(med.diferenciaPct    || med.diferencia_pct),
+        litros_real_t1:    num(med.litrosRealT1 || med.litros_real_t1),
+        litros_real_t2:    num(med.litrosRealT2 || med.litros_real_t2),
+        total_real:        num(med.totalReal    || med.total_real),
+        diferencia_litros: num(med.diferenciaLitros || med.diferencia_litros),
+        diferencia_pct:    num(med.diferenciaPct    || med.diferencia_pct),
       } : null,
       cargas: cargas,
     }
@@ -220,14 +220,14 @@ function exportarDatos(body, user) {
 
     rows.push({
       fecha:      ds,
-      cargaT1:   carga.t1,
-      cargaT2:   carga.t2,
-      totalCarga: carga.t1 + carga.t2,
-      realT1:    med.t1,
-      realT2:    med.t2,
-      totalReal: med.total,
-      difLitros: med.dif,
-      difPct:    med.pct,
+      carga_t1:   carga.t1,
+      carga_t2:   carga.t2,
+      total_carga: carga.t1 + carga.t2,
+      real_t1:    med.t1,
+      real_t2:    med.t2,
+      total_real: med.total,
+      dif_litros: med.dif,
+      dif_pct:    med.pct,
       pipa:      prevCarga.t1 + prevCarga.t2,
     });
 
@@ -237,7 +237,7 @@ function exportarDatos(body, user) {
   return { success: true, data: rows };
 }
 
-function getCargasPorProveedor(body, user) {
+function getCargasDetallePorProveedor(body, user) {
   var proveedorNombre = String(body.proveedorNombre || body.proveedor_nombre || '');
   var inicio          = String(body.fechaInicio     || body.inicio           || '');
   var fin             = String(body.fechaFin        || body.fin              || '');

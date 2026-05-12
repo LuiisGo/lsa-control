@@ -24,7 +24,7 @@ export default function NuevaCargaPage() {
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [loadingProveedores, setLoadingProveedores] = useState(true)
 
-  const [proveedor, setProveedor] = useState('')
+  const [proveedorId, setProveedorId] = useState('')
   const [litrosT1, setLitrosT1] = useState('')
   const [litrosT2, setLitrosT2] = useState('')
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
@@ -60,7 +60,7 @@ export default function NuevaCargaPage() {
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {}
-    if (!proveedor) newErrors.proveedor = 'Seleccioná un proveedor'
+    if (!proveedorId) newErrors.proveedor = 'Seleccioná un proveedor'
     if (!litrosT1 && !litrosT2) newErrors.litros = 'Ingresá al menos un valor de litros'
     if (litrosT1 && parseFloat(litrosT1) < 0) newErrors.litros = 'Los litros no pueden ser negativos'
     if (litrosT2 && parseFloat(litrosT2) < 0) newErrors.litros = 'Los litros no pueden ser negativos'
@@ -77,12 +77,18 @@ export default function NuevaCargaPage() {
       const now = new Date()
       const hora = now.toTimeString().substring(0, 5)
       const fecha = now.toISOString().split('T')[0]
+      const proveedor = proveedores.find(p => p.id === proveedorId)
+      if (!proveedor) {
+        toast.error('Seleccioná un proveedor válido')
+        return
+      }
 
       if (!navigator.onLine) {
         await savePendingCarga({
           fecha,
           hora,
-          proveedor,
+          proveedor_id: proveedor.id,
+          proveedor: proveedor.nombre,
           litros_t1: parseFloat(litrosT1) || 0,
           litros_t2: parseFloat(litrosT2) || 0,
           foto_base64: fotoBase64 ?? undefined,
@@ -99,7 +105,8 @@ export default function NuevaCargaPage() {
       }
 
       const res = await apiCall('saveCarga', {
-        proveedor,
+        proveedor_id: proveedor.id,
+        proveedor: proveedor.nombre,
         litros_t1: parseFloat(litrosT1) || 0,
         litros_t2: parseFloat(litrosT2) || 0,
         foto_url: fotoUrl,
@@ -133,14 +140,14 @@ export default function NuevaCargaPage() {
           <label htmlFor="proveedor" className="label label-required">Proveedor</label>
           <select
             id="proveedor"
-            value={proveedor}
-            onChange={e => setProveedor(e.target.value)}
+            value={proveedorId}
+            onChange={e => setProveedorId(e.target.value)}
             className={`input ${errors.proveedor ? 'input-error' : ''}`}
             disabled={loadingProveedores || saving}
           >
             <option value="">Seleccioná un proveedor</option>
             {proveedores.map(p => (
-              <option key={p.id} value={p.nombre}>{p.codigo ? `[${p.codigo}] ${p.nombre}` : p.nombre}</option>
+              <option key={p.id} value={p.id}>{p.codigo ? `[${p.codigo}] ${p.nombre}` : p.nombre}</option>
             ))}
           </select>
           {errors.proveedor && <p className="error-msg"><AlertCircle className="w-3.5 h-3.5" />{errors.proveedor}</p>}

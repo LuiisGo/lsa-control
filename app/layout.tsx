@@ -18,7 +18,7 @@ const firaCode = Fira_Code({
 
 export const metadata: Metadata = {
   title: 'Control LSA',
-  description: 'Control de entradas y salidas de combustible LSA',
+  description: 'Control diario de leche para Agrícola San Antonio',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#2563eb',
+  themeColor: '#16a34a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,

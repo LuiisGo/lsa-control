@@ -108,6 +108,20 @@ function generarPlanilla(body, user) {
 
   if (!proveedorId || !qInicio || !qFin) return { success: false, error: 'Datos incompletos' };
 
+  var planillasSheet = getSheet('PLANILLAS');
+  var planillasData  = planillasSheet.getDataRange().getValues();
+  for (var ex = 1; ex < planillasData.length; ex++) {
+    if (String(planillasData[ex][3]) === proveedorId &&
+        String(planillasData[ex][1]) === qInicio &&
+        String(planillasData[ex][2]) === qFin) {
+      var estadoExistente = String(planillasData[ex][10] || 'GENERADA');
+      if (estadoExistente === 'PAGADA') {
+        return { success: false, error: 'Esta planilla ya está pagada y no se puede regenerar' };
+      }
+      return { success: false, error: 'Ya existe una planilla para este proveedor y período' };
+    }
+  }
+
   // Resolve aplicarIVA: explicit body param overrides proveedor default
   var aplicarIVA;
   if (body.aplicarIVA !== undefined) {
@@ -136,7 +150,9 @@ function generarPlanilla(body, user) {
   for (var i = 1; i < cargasData.length; i++) {
     var f    = dateToString(cargasData[i][1]);
     var prov = String(cargasData[i][3] || '');
-    if (f >= qInicio && f <= qFin && prov === proveedorNombre) {
+    var provIdCarga = String(cargasData[i][8] || '');
+    var sameProvider = provIdCarga ? provIdCarga === proveedorId : prov === proveedorNombre;
+    if (f >= qInicio && f <= qFin && sameProvider) {
       totalLitros += num(cargasData[i][6]);
     }
   }
@@ -147,7 +163,7 @@ function generarPlanilla(body, user) {
   var totalConIVA = Math.round((subtotal + iva) * 100) / 100;
 
   var id = generateId();
-  getSheet('PLANILLAS').appendRow([
+  planillasSheet.appendRow([
     id, qInicio, qFin, proveedorId, proveedorNombre,
     totalLitros, precioLitro, subtotal, iva, totalConIVA,
     'GENERADA', getFechaHoy(),

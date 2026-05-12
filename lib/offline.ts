@@ -7,6 +7,7 @@ interface LSASchema extends DBSchema {
       id: string
       fecha: string
       hora: string
+      proveedor_id?: string
       proveedor: string
       litros_t1: number
       litros_t2: number
@@ -153,7 +154,7 @@ export async function syncPending(token: string): Promise<number> {
         const fotoRes = await apiCall<{ url: string }>('subirFoto', { base64: carga.foto_base64, fecha: carga.fecha }, token)
         if (fotoRes.success && fotoRes.data) fotoUrl = fotoRes.data.url
       }
-      const res = await apiCall('saveCarga', { proveedor: carga.proveedor, litros_t1: carga.litros_t1, litros_t2: carga.litros_t2, foto_url: fotoUrl, fecha: carga.fecha, hora: carga.hora }, token)
+      const res = await apiCall('saveCarga', { proveedor_id: carga.proveedor_id, proveedor: carga.proveedor, litros_t1: carga.litros_t1, litros_t2: carga.litros_t2, foto_url: fotoUrl, fecha: carga.fecha, hora: carga.hora }, token)
       if (res.success) { await db.delete('cargas_pending', carga.id); synced++ }
     } catch (err) { console.error('[syncPending] carga error:', err) }
   }

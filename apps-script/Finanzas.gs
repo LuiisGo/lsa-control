@@ -49,12 +49,13 @@ function getPrecioComprador(body, user) {
   var best  = null;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (String(row[1]) === compradorId && String(row[2]) <= fecha) {
-      if (!best || String(row[2]) > String(best[2])) best = row;
+    var rowFecha = dateToString(row[2]);
+    if (String(row[1]) === compradorId && rowFecha <= fecha) {
+      if (!best || rowFecha > dateToString(best[2])) best = row;
     }
   }
   if (!best) return { success: true, data: null };
-  return { success: true, data: { id: String(best[0]), compradorId: String(best[1]), fecha: String(best[2]), precioLitro: num(best[3]) } };
+  return { success: true, data: { id: String(best[0]), compradorId: String(best[1]), fecha: dateToString(best[2]), precioLitro: num(best[3]) } };
 }
 
 function savePrecioComprador(body, user) {
@@ -90,15 +91,22 @@ function saveEnvio(body, user) {
   var litros = num(body.litrosEnviados || body.litros_enviados);
   if (litros <= 0) return { success: false, error: 'Litros debe ser > 0' };
 
-  // monto is now optional
-  var monto = body.montoTotal !== undefined ? num(body.montoTotal) : '';
+  var compradorId = String(body.compradorId || body.comprador_id || '');
+  if (!compradorId) return { success: false, error: 'Comprador requerido' };
+
+  var precioRes = getPrecioComprador({ compradorId: compradorId, fecha: getFechaHoy() }, user);
+  if (!precioRes.data || num(precioRes.data.precioLitro) <= 0) {
+    return { success: false, error: 'Este comprador no tiene precio vigente' };
+  }
+  var precioLitro = num(precioRes.data.precioLitro);
+  var monto = Math.round(litros * precioLitro * 100) / 100;
 
   var id    = generateId();
   var fecha = getFechaHoy();
 
   getSheet('ENVIOS').appendRow([
     id, fecha,
-    String(body.compradorId || body.comprador_id || ''),
+    compradorId,
     String(body.compradorNombre || body.comprador_nombre || ''),
     litros,
     monto === '' ? '' : monto,
@@ -131,7 +139,7 @@ function saveEnvio(body, user) {
   totalEnviadoDia  = Math.round(totalEnviadoDia * 10) / 10;
   var resto        = Math.round((totalCargaDia - totalEnviadoDia) * 10) / 10;
 
-  var result = { success: true, data: { id: id, totalCargaDia: totalCargaDia, totalEnviadoDia: totalEnviadoDia, resto: resto } };
+  var result = { success: true, data: { id: id, precioLitro: precioLitro, montoTotal: monto, totalCargaDia: totalCargaDia, totalEnviadoDia: totalEnviadoDia, resto: resto } };
   if (totalEnviadoDia > totalCargaDia) {
     result.data.advertencia = 'Total enviado supera la recepción del día';
   }
@@ -227,7 +235,7 @@ function usarRemanente(body, user) {
       sheet.getRange(i+1,6).setValue(true);
       sheet.getRange(i+1,7).setValue(getFechaHoy());
       var t1 = num(data[i][2]), t2 = num(data[i][3]), total = num(data[i][4]);
-      getSheet('Cargas').appendRow([generateId(), getFechaHoy(), getNow(), 'Remanente día anterior', t1, t2, total, '']);
+      getSheet('Cargas').appendRow([generateId(), getFechaHoy(), getNow(), 'Remanente día anterior', t1, t2, total, '', '']);
       return { success: true };
     }
   }

@@ -15,6 +15,7 @@ import {
   formatLitros, formatLitrosNum, formatFecha,
   getDiferenciaColor, formatPorcentaje, getTodayString,
 } from '@/lib/utils'
+import { normalizeExportRows, type ExportRow } from '@/lib/exportRows'
 import toast from 'react-hot-toast'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -23,11 +24,6 @@ interface DashboardHoy {
   totalT1: number; totalT2: number; total: number
   medicion: { litros_real_t1: number; litros_real_t2: number; total_real: number; diferencia_litros: number; diferencia_pct: number } | null
   cargas: Carga[]
-}
-
-interface ExportRow {
-  fecha: string; carga_t1: number; carga_t2: number; total_carga: number
-  real_t1: number; real_t2: number; total_real: number; dif_litros: number; dif_pct: number; pipa: number
 }
 
 interface DatoProveedor {
@@ -182,7 +178,7 @@ export default function AdminDashboardPage() {
     setQuincenaRows(null)
     setLoadingQ(true)
     apiCall<ExportRow[]>('exportarDatos', { fechaInicio: q.inicio, fechaFin: q.fin }, token)
-      .then(r => { if (r.success && r.data) setQuincenaRows(r.data) })
+      .then(r => { if (r.success && r.data) setQuincenaRows(normalizeExportRows(r.data)) })
       .catch(() => toast.error('Error al cargar quincena'))
       .finally(() => setLoadingQ(false))
   }, [token, qIndex])
@@ -198,7 +194,7 @@ export default function AdminDashboardPage() {
         apiCall<ExportRow[]>('exportarDatos', { fechaInicio: periodoInicio, fechaFin: periodoFin }, token),
         apiCall<DatoProveedor[]>('getCargasPorProveedor', { fechaInicio: periodoInicio, fechaFin: periodoFin }, token),
       ])
-      if (r1.success && r1.data) setPeriodoRows(r1.data)
+      if (r1.success && r1.data) setPeriodoRows(normalizeExportRows(r1.data))
       if (r2.success && r2.data) setProveedores(r2.data)
     } catch { toast.error('Error al cargar período') }
     finally { setLoadingPeriodo(false) }

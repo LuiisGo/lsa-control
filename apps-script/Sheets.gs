@@ -18,7 +18,7 @@ function initSheets() {
   }
 
   // Fase 1
-  ensureSheet('Cargas',     ['ID','Fecha','Hora','Proveedor','Litros_T1','Litros_T2','Total','Foto_URL']);
+  ensureSheet('Cargas',     ['ID','Fecha','Hora','Proveedor','Litros_T1','Litros_T2','Total','Foto_URL','Proveedor_ID']);
   ensureSheet('Mediciones', ['ID','Fecha','Litros_Real_T1','Litros_Real_T2','Total_Real','Dif_Litros','Dif_Pct','Foto_URL']);
   ensureSheet('Proveedores',['ID','Nombre','Activo']);
   ensureSheet('LOG_CAMBIOS',['ID','Fecha','Hora','Usuario','Accion','Hoja','Registro_ID','Anterior','Nuevo']);
@@ -98,7 +98,7 @@ function getCargas(body, user) {
         id: String(row[0]), fecha: dateToString(row[1]),
         hora: String(row[2]||''), proveedor: String(row[3]||''),
         litros_t1: num(row[4]), litros_t2: num(row[5]), total: num(row[6]),
-        foto_url: String(row[7]||''),
+        foto_url: String(row[7]||''), proveedor_id: String(row[8]||''),
       });
     }
   }
@@ -112,6 +112,7 @@ function saveCarga(body, user) {
   if (t1 + t2 <= 0)           return { success: false, error: 'Total litros debe ser > 0' };
   var proveedor = String(body.proveedor || '').trim();
   if (!proveedor)             return { success: false, error: 'Proveedor requerido' };
+  var proveedorId = String(body.proveedor_id || body.proveedorId || '').trim();
 
   var sheet = getSheet('Cargas');
   var id    = generateId();
@@ -119,7 +120,7 @@ function saveCarga(body, user) {
   var hora  = body.hora  || getNow();
   sheet.appendRow([
     id, fecha, hora, sanitizarValor(proveedor),
-    t1, t2, t1+t2, sanitizarValor(body.foto_url||'')
+    t1, t2, t1+t2, sanitizarValor(body.foto_url||''), sanitizarValor(proveedorId)
   ]);
   registrarLog(user, 'CREATE_CARGA', 'Cargas', id, '', { fecha: fecha, proveedor: proveedor, total: t1+t2 });
   return { success: true, data: { id: id } };
@@ -139,10 +140,14 @@ function editarCarga(body, user) {
       var prov = body.proveedor !== undefined ? String(body.proveedor).trim() : String(data[i][3]);
       if (!prov) return { success: false, error: 'Proveedor requerido' };
       var anterior = { proveedor: String(data[i][3]), t1: num(data[i][4]), t2: num(data[i][5]), total: num(data[i][6]) };
+      var proveedorId = body.proveedor_id !== undefined || body.proveedorId !== undefined
+        ? String(body.proveedor_id || body.proveedorId || '').trim()
+        : String(data[i][8] || '');
       sheet.getRange(i+1,4).setValue(sanitizarValor(prov));
       sheet.getRange(i+1,5).setValue(t1);
       sheet.getRange(i+1,6).setValue(t2);
       sheet.getRange(i+1,7).setValue(t1+t2);
+      sheet.getRange(i+1,9).setValue(sanitizarValor(proveedorId));
       registrarLog(user, 'UPDATE_CARGA', 'Cargas', body.id, anterior, { proveedor: prov, t1: t1, t2: t2, total: t1+t2 });
       return { success: true };
     }
@@ -562,6 +567,7 @@ function migrateSheets() {
   addColIfMissing('Proveedores', 'Frecuencia_Pago');
   addColIfMissing('Proveedores', 'Dia_Corte_Semanal');
   addColIfMissing('Proveedores', 'Codigo');
+  addColIfMissing('Cargas',      'Proveedor_ID');
   addColIfMissing('Usuarios',    'CredentialId');
   addColIfMissing('Usuarios',    'PublicKey');
   addColIfMissing('Usuarios',    'Permisos');

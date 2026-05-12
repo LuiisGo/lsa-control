@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!
+const PUBLIC_ACTIONS = new Set(['login', 'portalLogin', 'portalData'])
 
 /**
  * Proxy server-side para todas las llamadas al Apps Script.
@@ -17,6 +19,19 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
+    const action = String(body.action || '')
+
+    if (!PUBLIC_ACTIONS.has(action)) {
+      const sessionToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+      const apiToken = typeof sessionToken?.apiToken === 'string' ? sessionToken.apiToken : ''
+      if (!apiToken) {
+        return NextResponse.json(
+          { success: false, error: 'Sesión requerida' },
+          { status: 401 }
+        )
+      }
+      body.token = apiToken
+    }
 
     const res = await fetch(API_URL, {
       method: 'POST',

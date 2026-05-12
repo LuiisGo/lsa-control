@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
-import { isWebAuthnAvailable, webAuthnAuthenticate } from '@/lib/webauthn'
 
 // toast was previously imported but only signIn errors are used now
 
@@ -34,14 +33,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [biometricLoading, setBiometricLoading] = useState(false)
-  const [webAuthnSupported, setWebAuthnSupported] = useState(false)
   const [error, setError] = useState('')
   const [lockoutUntil, setLockoutUntil] = useState(0)
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
-    isWebAuthnAvailable().then(setWebAuthnSupported)
     const rl = readRateLimit()
     if (rl.lockedUntil > Date.now()) setLockoutUntil(rl.lockedUntil)
   }, [])
@@ -98,35 +94,6 @@ export default function LoginPage() {
       setError('Error de conexión. Intentá de nuevo.')
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function handleBiometric() {
-    setBiometricLoading(true)
-    setError('')
-    try {
-      const data = await webAuthnAuthenticate()
-      if (!data) {
-        setError('Autenticación biométrica fallida')
-        return
-      }
-
-      const result = await signIn('credentials', {
-        username: data.email,
-        password: `webauthn:${data.token}`,
-        redirect: false,
-      })
-
-      if (result?.ok) {
-        router.replace(data.role === 'admin' ? '/admin' : '/empleado')
-        router.refresh()
-      } else {
-        setError('No se pudo iniciar sesión biométrica')
-      }
-    } catch {
-      setError('Error al usar biometría. Usá tu contraseña.')
-    } finally {
-      setBiometricLoading(false)
     }
   }
 
@@ -218,42 +185,6 @@ export default function LoginPage() {
               ) : 'Ingresar'}
             </button>
           </form>
-
-          {/* Biométrico */}
-          {webAuthnSupported && (
-            <>
-              <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200" />
-                </div>
-                <div className="relative flex justify-center">
-                  <span className="bg-white px-3 text-xs text-slate-400">o continuar con</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleBiometric}
-                disabled={biometricLoading}
-                className="btn-secondary w-full gap-2"
-              >
-                {biometricLoading ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  /* Fingerprint icon */
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <path d="M12 10a2 2 0 0 0-2 2v4" />
-                    <path d="M10 10a2 2 0 0 1 4 0c0 4-1 7-2 8" />
-                    <path d="M8.5 8.5A5 5 0 0 1 17 12c0 4.5-1.5 7-3 9" />
-                    <path d="M6 9a7 7 0 0 1 12.22-1" />
-                    <path d="M4.5 10.5A9.5 9.5 0 0 1 21 12c0 5-2 9-4 11" />
-                    <path d="M2 13a12 12 0 0 1 3.5-7.5" />
-                  </svg>
-                )}
-                Face ID / Huella digital
-              </button>
-            </>
-          )}
         </div>
 
         {/* ── Footer POWERED BY FUTURA ───────────────────── */}

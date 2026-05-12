@@ -1,11 +1,11 @@
 {
   "name": "Control LSA",
   "short_name": "Control LSA",
-  "description": "Control de entradas y salidas de combustible LSA",
+  "description": "Control diario de leche para Agrícola San Antonio",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F8FAFC",
-  "theme_color": "#2563eb",
+  "theme_color": "#16a34a",
   "orientation": "any",
   "icons": [
     {

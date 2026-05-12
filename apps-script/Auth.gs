@@ -2,7 +2,7 @@
 // Auth.gs — Login y validación de token (con hashing + expiración)
 // ============================================================
 // Cols Usuarios: 0=ID 1=Nombre 2=Username 3=Password(hash) 4=Role
-//                5=Activo 6=ApiToken 7=credentialId 8=publicKey
+//                5=Activo 6=ApiToken 7=legacyCredentialId 8=legacyPublicKey
 //                9=Permisos 10=Token_Expira
 
 function handleLogin(body) {
@@ -11,6 +11,11 @@ function handleLogin(body) {
 
   if (!username || !password) {
     return { success: false, error: 'Usuario y contraseña requeridos' };
+  }
+
+  var rate = _getLoginRateLimit(username);
+  if (rate.locked) {
+    return { success: false, error: 'Demasiados intentos. Espera 5 minutos e intenta otra vez.' };
   }
 
   var sheet = getSheet('Usuarios');
@@ -41,6 +46,7 @@ function handleLogin(body) {
     var expira  = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     sheet.getRange(i + 1, 7).setValue(token);
     _setTokenExpira(sheet, i + 1, expira);
+    _clearLoginRateLimit(username);
 
     var rawPermisos = String(row[9] || '');
     var permisos    = _parsePermisos(rawPermisos);
@@ -59,6 +65,7 @@ function handleLogin(body) {
     };
   }
 
+  _recordFailedLogin(username);
   return { success: false, error: 'Usuario o contraseña incorrectos' };
 }
 
@@ -118,66 +125,39 @@ function doLogout(body) {
   return { success: false, error: 'Token no encontrado' };
 }
 
-function getChallenge(body) {
-  // 32 bytes derivados de SHA-256(2 UUIDs + timestamp) → base64
-  var seed = Utilities.getUuid() + ':' + Utilities.getUuid() + ':' + Date.now();
-  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed, Utilities.Charset.UTF_8);
-  var challenge = Utilities.base64Encode(bytes);
-  return { success: true, data: { challenge: challenge } };
+var LOGIN_MAX_ATTEMPTS = 5;
+var LOGIN_LOCK_SECONDS = 5 * 60;
+
+function _loginRateKey(username) {
+  return 'login:' + String(username || '').trim().toLowerCase();
 }
 
-function verifyWebAuthn(body) {
-  var credentialId = String(body.credentialId || '').trim();
-  if (!credentialId) return { success: false, error: 'credentialId requerido' };
-
-  var sheet = getSheet('Usuarios');
-  var data  = sheet.getDataRange().getValues();
-
-  for (var i = 1; i < data.length; i++) {
-    var row = data[i];
-    var storedCred = String(row[7] || '').trim();
-    var activo = row[5];
-
-    if (storedCred === credentialId && activo !== false && activo !== 'false' && activo !== 0) {
-      var token  = generateToken();
-      var expira = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-      sheet.getRange(i + 1, 7).setValue(token);
-      _setTokenExpira(sheet, i + 1, expira);
-      return {
-        success: true,
-        data: {
-          token:  token,
-          userId: String(row[0]),
-          nombre: String(row[1]),
-          email:  String(row[2]),
-          role:   String(row[4] || 'empleado'),
-          expira: expira,
-        }
-      };
-    }
+function _getLoginRateLimit(username) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var raw = cache.get(_loginRateKey(username));
+    var attempts = raw ? Number(raw) : 0;
+    return { attempts: attempts, locked: attempts >= LOGIN_MAX_ATTEMPTS };
+  } catch (e) {
+    return { attempts: 0, locked: false };
   }
-  return { success: false, error: 'Credencial WebAuthn no encontrada' };
 }
 
-function saveWebAuthnCredential(body) {
-  var token        = String(body.token || '').trim();
-  var credentialId = String(body.credentialId || '').trim();
-  var publicKey    = String(body.publicKey || '').trim();
+function _recordFailedLogin(username) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var key = _loginRateKey(username);
+    var raw = cache.get(key);
+    var attempts = raw ? Number(raw) : 0;
+    attempts++;
+    cache.put(key, String(attempts), LOGIN_LOCK_SECONDS);
+  } catch (e) {}
+}
 
-  var user = validateToken(token);
-  if (!user) return { success: false, error: 'Token inválido' };
-
-  var sheet = getSheet('Usuarios');
-  var data  = sheet.getDataRange().getValues();
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === user.id) {
-      sheet.getRange(i + 1, 8).setValue(credentialId);
-      sheet.getRange(i + 1, 9).setValue(publicKey);
-      return { success: true };
-    }
-  }
-  return { success: false, error: 'Usuario no encontrado' };
+function _clearLoginRateLimit(username) {
+  try {
+    CacheService.getScriptCache().remove(_loginRateKey(username));
+  } catch (e) {}
 }
 
 // ── Helper: setea Token_Expira col 11 (1-indexed) sin romper si la columna no existe ─

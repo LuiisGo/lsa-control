@@ -52,10 +52,12 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (session.user) {
-        const u = session.user as { role: string; apiToken: string; userId: string; permisos: string[] }
+        const u = session.user as { role: string; apiToken?: string; userId: string; permisos: string[] }
         u.role = token.role as string
-        u.apiToken = token.apiToken as string
         u.userId = token.userId as string
+        // Compatibility marker for existing client components. The real Apps
+        // Script token stays only inside the encrypted/httpOnly NextAuth JWT.
+        u.apiToken = 'server-proxy'
         // Compat: si el JWT viene de una sesión anterior sin `permisos` o
         // el arreglo está vacío, asumir todos los permisos (mismo comportamiento
         // que `_parsePermisos` en Apps Script con celda vacía).

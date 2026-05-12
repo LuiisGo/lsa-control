@@ -44,13 +44,10 @@ function doPost(e) {
     var token  = body.token;
 
     // Acciones públicas (sin token)
-    var publicActions = ['login', 'webauthn-challenge', 'webauthn-verify', 'saveWebAuthnCredential', 'portalLogin', 'portalData'];
+    var publicActions = ['login', 'portalLogin', 'portalData'];
     if (publicActions.indexOf(action) !== -1) {
       switch (action) {
         case 'login':                  return respond(handleLogin(body));
-        case 'webauthn-challenge':     return respond(getChallenge(body));
-        case 'webauthn-verify':        return respond(verifyWebAuthn(body));
-        case 'saveWebAuthnCredential': return respond(saveWebAuthnCredential(body));
         case 'portalLogin':            return respond(loginPortalProveedor(body));
         case 'portalData':             return respond(getPortalProveedor(body));
       }
@@ -284,6 +281,10 @@ function setup() {
     '3. Copiar la URL del Web App\n' +
     '4. Agregar en Netlify como NEXT_PUBLIC_API_URL'
   );
+}
+
+function runMigrationLSA() {
+  migrateSheets();
 }
 
 function onOpen() {

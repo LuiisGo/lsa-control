@@ -120,42 +120,58 @@ export function downloadXLSX(
   filename: string,
   sheetName = 'Datos'
 ): void {
-  // Dynamic import to avoid SSR issues
-  import('xlsx').then(XLSX => {
-    // Build worksheet data: header row + data rows
-    const wsData: (string | number | null)[][] = [
-      headers.map(h => h.label),
-      ...rows.map(row =>
-        headers.map(h => {
-          const val = row[h.key]
-          if (val == null) return null
-          if (typeof val === 'number') return val
-          const num = Number(val)
-          return isNaN(num) ? String(val) : num
-        })
-      ),
-    ]
+  // Dynamic import to avoid bundling Excel support into the initial app shell.
+  import('exceljs').then(async ExcelJS => {
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet(sheetName)
 
-    const ws = XLSX.utils.aoa_to_sheet(wsData)
+    worksheet.columns = headers.map(h => ({
+      header: h.label,
+      key: h.key,
+      width: Math.max(h.label.length + 4, 14),
+    }))
 
-    // Column widths
-    ws['!cols'] = headers.map(h => ({ wch: Math.max(h.label.length + 4, 14) }))
+    rows.forEach(row => {
+      const values: Record<string, string | number | null> = {}
+      headers.forEach(h => {
+        const val = row[h.key]
+        if (val == null) {
+          values[h.key] = null
+          return
+        }
+        if (typeof val === 'number') {
+          values[h.key] = val
+          return
+        }
+        const num = Number(val)
+        values[h.key] = Number.isNaN(num) ? String(val) : num
+      })
+      worksheet.addRow(values)
+    })
 
-    // Header row bold styling (basic)
-    const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1')
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C })
-      if (!ws[cellAddr]) continue
-      ws[cellAddr].s = {
-        font: { bold: true, color: { rgb: 'FFFFFF' } },
-        fill: { fgColor: { rgb: '1E3A5F' } },
-        alignment: { horizontal: 'center' },
-      }
+    const headerRow = worksheet.getRow(1)
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E3A5F' },
     }
+    headerRow.alignment = { horizontal: 'center' }
 
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, sheetName)
-    XLSX.writeFile(wb, filename)
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }).catch(err => {
+    console.error('[downloadXLSX]', err)
   })
 }
 

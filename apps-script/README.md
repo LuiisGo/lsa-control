@@ -7,7 +7,7 @@ Esta carpeta contiene el backend completo del sistema LSA Control implementado e
 | Archivo | Responsabilidad |
 |---------|----------------|
 | `Code.gs` | Entry point: `doPost`, dispatch, helpers globales |
-| `Auth.gs` | Login, tokens, WebAuthn |
+| `Auth.gs` | Login con usuario/contraseña y tokens de sesión |
 | `Sheets.gs` | CRUD Cargas, Mediciones, Proveedores, Usuarios |
 | `Quincena.gs` | Dashboard diario, datos quincenales, comparativa, exportar |
 | `Finanzas.gs` | Compradores, Envíos, Remanentes, Dashboard financiero |

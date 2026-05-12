@@ -4,6 +4,7 @@ import { useSession } from 'next-auth/react'
 import { Download, Loader2, Calendar, FileSpreadsheet } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { downloadXLSX, getQuincenasRecientes, getTodayString } from '@/lib/utils'
+import { normalizeExportRows } from '@/lib/exportRows'
 import toast from 'react-hot-toast'
 
 const HEADERS = [
@@ -53,7 +54,7 @@ export default function ExportarPage() {
       }
 
       const filename = `LSA_${fechaInicio}_al_${fechaFin}.xlsx`
-      downloadXLSX(res.data, HEADERS, filename, 'Control LSA')
+      downloadXLSX(normalizeExportRows(res.data), HEADERS, filename, 'Control LSA')
       toast.success(`✅ Excel generado: ${res.data.length} registros`)
     } catch {
       toast.error('Error al exportar')
