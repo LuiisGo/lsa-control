@@ -31,15 +31,18 @@ function initSheets() {
 
   // Fase 2
   ensureSheet('COMPRADORES',        ['ID','Nombre','NIT','Activo']);
-  ensureSheet('ENVIOS',             ['ID','Fecha','Comprador_ID','Comprador_Nombre','Litros_Enviados','Monto_Total','Notas','Usuario_ID','Usuario_Nombre','Timestamp']);
+  ensureSheet('ENVIOS',             ['ID','Fecha','Comprador_ID','Comprador_Nombre','Litros_Enviados','Monto_Total','Notas','Usuario_ID','Usuario_Nombre','Timestamp','Precio_Litro','Litros_Recibidos','Diferencia_Litros','Origen']);
   ensureSheet('PRECIOS_COMPRADOR',  ['ID','Comprador_ID','Fecha','Precio_Litro']);
   ensureSheet('REMANENTES',         ['ID','Fecha_Origen','Litros_T1','Litros_T2','Total','Usado_Como_Inicial','Fecha_Uso']);
   ensureSheet('TARIFAS_PROVEEDORES',['ID','Proveedor_ID','Proveedor_Nombre','Precio_Litro','Vigente_Desde','Activo']);
-  ensureSheet('PLANILLAS',          ['ID','Quincena_Inicio','Quincena_Fin','Proveedor_ID','Proveedor_Nombre','Total_Litros','Precio_Litro','Subtotal','IVA','Total_Con_IVA','Estado','Fecha_Generada']);
+  ensureSheet('PLANILLAS',          ['ID','Quincena_Inicio','Quincena_Fin','Proveedor_ID','Proveedor_Nombre','Total_Litros','Precio_Litro','Subtotal','IVA','Total_Con_IVA','Estado','Fecha_Generada','IVA_Aplicado','Adelanto_1','Adelanto_2','Adelanto_3','Descuentos','Total_Por_Pagar','Origen']);
   ensureSheet('GASTOS',             ['ID','Fecha','Categoria_ID','Categoria_Nombre','Descripcion','Monto','IVA_Incluido','Usuario_ID','Usuario_Nombre','Comprobante_URL']);
   ensureSheet('CATEGORIAS_GASTOS',  ['ID','Nombre','Activo']);
   ensureSheet('ALERTAS_CONFIG',     ['ID','Tipo','Descripcion','Umbral','Emails','Activo']);
   ensureSheet('ACCESOS_PROVEEDORES',['ID','Proveedor_ID','Proveedor_Nombre','Codigo_Acceso','Link_Token','Activo']);
+  ensureSheet('AJUSTES_VENTA',      ['ID','Periodo_Inicio','Periodo_Fin','Comprador_ID','Comprador_Nombre','Concepto','Monto','Origen','Fecha_Registro']);
+  ensureSheet('CIERRES_QUINCENA',   ['ID','Periodo_Inicio','Periodo_Fin','Origen','Total_Recepcion','Total_Enviado','Total_Recibido_Compradores','Diferencia_Litros','Total_Ventas','Total_Planillas','Total_Adelantos','Total_Por_Pagar','Gastos_Operativos','Margen_Bruto','Fecha_Importacion']);
+  ensureSheet('IMPORT_LOG',         ['ID','Clave','Periodo_Inicio','Periodo_Fin','Origen','Estado','Mensaje','Fecha']);
 
   // Initial users (passwords ya hasheadas — nunca guardar texto plano)
   var uData = usuSheet.getDataRange().getValues();
@@ -573,7 +576,30 @@ function migrateSheets() {
   addColIfMissing('Usuarios',    'Permisos');
   addColIfMissing('Usuarios',    'Token_Expira');
   addColIfMissing('PLANILLAS',   'IVA_Aplicado');
+  addColIfMissing('PLANILLAS',   'Adelanto_1');
+  addColIfMissing('PLANILLAS',   'Adelanto_2');
+  addColIfMissing('PLANILLAS',   'Adelanto_3');
+  addColIfMissing('PLANILLAS',   'Descuentos');
+  addColIfMissing('PLANILLAS',   'Total_Por_Pagar');
+  addColIfMissing('PLANILLAS',   'Origen');
+  addColIfMissing('ENVIOS',      'Precio_Litro');
+  addColIfMissing('ENVIOS',      'Litros_Recibidos');
+  addColIfMissing('ENVIOS',      'Diferencia_Litros');
+  addColIfMissing('ENVIOS',      'Origen');
+  ensureSheetWithHeaders_('AJUSTES_VENTA', ['ID','Periodo_Inicio','Periodo_Fin','Comprador_ID','Comprador_Nombre','Concepto','Monto','Origen','Fecha_Registro']);
+  ensureSheetWithHeaders_('CIERRES_QUINCENA', ['ID','Periodo_Inicio','Periodo_Fin','Origen','Total_Recepcion','Total_Enviado','Total_Recibido_Compradores','Diferencia_Litros','Total_Ventas','Total_Planillas','Total_Adelantos','Total_Por_Pagar','Gastos_Operativos','Margen_Bruto','Fecha_Importacion']);
+  ensureSheetWithHeaders_('IMPORT_LOG', ['ID','Clave','Periodo_Inicio','Periodo_Fin','Origen','Estado','Mensaje','Fecha']);
   migrarCodigosProveedores();
   migrarPasswords();              // hashea contraseñas legacy en texto plano
   Logger.log('Migración completa.');
+}
+
+function ensureSheetWithHeaders_(sheetName, headers) {
+  var sheet = getSheet(sheetName);
+  if (sheet.getLastRow() === 0 || sheet.getLastColumn() === 0) {
+    sheet.appendRow(headers);
+    return sheet;
+  }
+  for (var i = 0; i < headers.length; i++) addColIfMissing(sheetName, headers[i]);
+  return sheet;
 }

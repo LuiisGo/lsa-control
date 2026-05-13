@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 interface Envio {
   id: string; fecha: string; compradorId: string; compradorNombre: string
   litrosEnviados: number; montoTotal: number; notas: string
+  precioLitro?: number; litrosRecibidos?: number; diferenciaLitros?: number; origen?: string
   usuarioNombre: string; timestamp: string
 }
 
@@ -44,6 +45,8 @@ export default function EnviosPage() {
 
   const total = envios.reduce((s, e) => s + e.montoTotal, 0)
   const totalL = envios.reduce((s, e) => s + e.litrosEnviados, 0)
+  const totalRecibido = envios.reduce((s, e) => s + (e.litrosRecibidos ?? e.litrosEnviados), 0)
+  const totalDif = totalRecibido - totalL
 
   return (
     <div className="space-y-6">
@@ -59,18 +62,22 @@ export default function EnviosPage() {
 
       {/* Totales */}
       {envios.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="card text-center">
             <p className="text-xs text-slate-500">Litros enviados</p>
             <p className="font-bold font-mono text-lg">{totalL.toFixed(1)} L</p>
           </div>
           <div className="card text-center">
-            <p className="text-xs text-slate-500">Ingresos</p>
-            <p className="font-bold font-mono text-lg text-success-700">{formatQ(total)}</p>
+            <p className="text-xs text-slate-500">Litros recibidos</p>
+            <p className="font-bold font-mono text-lg">{totalRecibido.toFixed(1)} L</p>
           </div>
           <div className="card text-center">
-            <p className="text-xs text-slate-500">Q/Litro prom.</p>
-            <p className="font-bold font-mono text-lg">{totalL > 0 ? (total / totalL).toFixed(4) : '—'}</p>
+            <p className="text-xs text-slate-500">Diferencia</p>
+            <p className="font-bold font-mono text-lg">{totalDif.toFixed(1)} L</p>
+          </div>
+          <div className="card text-center">
+            <p className="text-xs text-slate-500">Ingresos</p>
+            <p className="font-bold font-mono text-lg text-success-700">{formatQ(total)}</p>
           </div>
         </div>
       )}
@@ -83,7 +90,9 @@ export default function EnviosPage() {
             <thead>
               <tr>
                 <th>Comprador</th>
-                <th className="text-right">Litros</th>
+                <th className="text-right">Enviado</th>
+                <th className="text-right">Recibido</th>
+                <th className="text-right">Dif.</th>
                 <th className="text-right">Monto</th>
                 <th className="text-right">Q/L</th>
                 <th>Notas</th>
@@ -101,6 +110,8 @@ export default function EnviosPage() {
                       : `${e.litrosEnviados.toFixed(1)}`
                     }
                   </td>
+                  <td className="text-right font-mono">{(e.litrosRecibidos ?? e.litrosEnviados).toFixed(1)}</td>
+                  <td className="text-right font-mono">{(e.diferenciaLitros ?? 0).toFixed(1)}</td>
                   <td className="text-right font-mono">
                     {editingId === e.id
                       ? <input type="number" step="0.01" className="input w-28 text-right" value={editData.montoTotal ?? e.montoTotal} onChange={ev => setEditData(d => ({ ...d, montoTotal: parseFloat(ev.target.value) }))} />
@@ -108,7 +119,7 @@ export default function EnviosPage() {
                     }
                   </td>
                   <td className="text-right font-mono text-xs text-slate-500">
-                    {e.litrosEnviados > 0 ? (e.montoTotal / e.litrosEnviados).toFixed(4) : '—'}
+                    {(e.precioLitro ?? (e.litrosRecibidos ? e.montoTotal / e.litrosRecibidos : e.montoTotal / e.litrosEnviados)).toFixed(4)}
                   </td>
                   <td className="text-slate-500 text-sm max-w-[120px] truncate">
                     {editingId === e.id
@@ -129,7 +140,7 @@ export default function EnviosPage() {
                   </td>
                 </tr>
               ))}
-              {envios.length === 0 && <tr><td colSpan={7} className="text-center text-slate-400 py-6">Sin envíos en esta fecha</td></tr>}
+              {envios.length === 0 && <tr><td colSpan={9} className="text-center text-slate-400 py-6">Sin envíos en esta fecha</td></tr>}
             </tbody>
           </table>
         )}

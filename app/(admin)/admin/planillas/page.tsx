@@ -12,6 +12,9 @@ interface Planilla {
   totalLitros: number; precioLitro: number
   subtotal: number; iva: number; totalConIVA: number
   estado: string; ivaAplicado: boolean
+  adelanto1?: number; adelanto2?: number; adelanto3?: number
+  descuentos?: number; totalAdelantos?: number; totalPorPagar?: number
+  origen?: string
 }
 
 interface Proveedor {
@@ -30,6 +33,8 @@ export default function PlanillasPage() {
   const [qIdx, setQIdx] = useState(0)
   const [planillas, setPlanillas] = useState<Planilla[]>([])
   const [totalConIVA, setTotalConIVA] = useState(0)
+  const [totalAdelantos, setTotalAdelantos] = useState(0)
+  const [totalPorPagar, setTotalPorPagar] = useState(0)
   const [loading, setLoading] = useState(false)
   const [generando, setGenerando] = useState(false)
   const [marcandoPagada, setMarcandoPagada] = useState<string | null>(null)
@@ -48,7 +53,7 @@ export default function PlanillasPage() {
   async function loadPlanillas() {
     if (!token || !q) return
     setLoading(true)
-    const res = await apiCall<{ planillas: Planilla[]; totalConIVA: number }>(
+    const res = await apiCall<{ planillas: Planilla[]; totalConIVA: number; totalAdelantos?: number; totalPorPagar?: number }>(
       'getPlanillasQuincena',
       { quincenaInicio: q.inicio, quincenaFin: q.fin },
       token
@@ -56,6 +61,8 @@ export default function PlanillasPage() {
     if (res.success && res.data) {
       setPlanillas(res.data.planillas)
       setTotalConIVA(res.data.totalConIVA)
+      setTotalAdelantos(res.data.totalAdelantos ?? 0)
+      setTotalPorPagar(res.data.totalPorPagar ?? res.data.totalConIVA)
     }
     setLoading(false)
   }
@@ -143,7 +150,7 @@ export default function PlanillasPage() {
                 <span className="font-mono">{formatQ(reciboData.precioLitro)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Subtotal:</span>
+                <span>Total planilla:</span>
                 <span className="font-mono">{formatQ(reciboData.subtotal)}</span>
               </div>
               {reciboData.ivaAplicado && (
@@ -154,8 +161,8 @@ export default function PlanillasPage() {
               )}
             </div>
             <div className="flex justify-between border-t pt-2 items-center text-base font-bold">
-              <span>{reciboData.ivaAplicado ? 'TOTAL CON IVA' : 'TOTAL A PAGAR'}</span>
-              <span className="text-xl">{formatQ(reciboData.totalConIVA)}</span>
+              <span>FALTA PAGAR</span>
+              <span className="text-xl">{formatQ(reciboData.totalPorPagar ?? reciboData.totalConIVA)}</span>
             </div>
             <div className="space-y-8 pt-4 text-xs text-slate-400">
               <div className="flex justify-between">
@@ -190,12 +197,20 @@ export default function PlanillasPage() {
         </button>
       </div>
 
-      {/* Total card */}
+      {/* Total cards */}
       {totalConIVA > 0 && (
-        <div className="card border-primary-200 bg-primary-50 print:hidden">
-          <div className="flex justify-between items-center">
-            <p className="font-semibold text-primary-800">Total a pagar esta quincena</p>
-            <p className="text-2xl font-bold font-mono text-primary-900">{formatQ(totalConIVA)}</p>
+        <div className="grid md:grid-cols-3 gap-3 print:hidden">
+          <div className="card border-primary-200 bg-primary-50">
+            <p className="text-xs text-primary-700">Total planilla</p>
+            <p className="text-xl font-bold font-mono text-primary-900">{formatQ(totalConIVA)}</p>
+          </div>
+          <div className="card">
+            <p className="text-xs text-slate-500">Ya adelantado</p>
+            <p className="text-xl font-bold font-mono text-slate-800">{formatQ(totalAdelantos)}</p>
+          </div>
+          <div className="card border-success-200 bg-success-50">
+            <p className="text-xs text-success-700">Falta pagar</p>
+            <p className="text-xl font-bold font-mono text-success-900">{formatQ(totalPorPagar)}</p>
           </div>
         </div>
       )}
@@ -211,9 +226,9 @@ export default function PlanillasPage() {
                 <th>Proveedor</th>
                 <th className="text-right">Litros</th>
                 <th className="text-right">Q/L</th>
-                <th className="text-right">Subtotal</th>
-                <th className="text-right">IVA 12%</th>
-                <th className="text-right">Total</th>
+                <th className="text-right">Total planilla</th>
+                <th className="text-right">Ya adelantado</th>
+                <th className="text-right">Falta pagar</th>
                 <th>Estado</th>
                 <th></th>
               </tr>
@@ -225,10 +240,8 @@ export default function PlanillasPage() {
                   <td className="text-right font-mono">{p.totalLitros.toFixed(1)}</td>
                   <td className="text-right font-mono">{p.precioLitro.toFixed(4)}</td>
                   <td className="text-right font-mono">{formatQ(p.subtotal)}</td>
-                  <td className="text-right font-mono text-slate-500">
-                    {p.ivaAplicado ? formatQ(p.iva) : '—'}
-                  </td>
-                  <td className="text-right font-mono font-semibold">{formatQ(p.totalConIVA)}</td>
+                  <td className="text-right font-mono text-slate-500">{formatQ(p.totalAdelantos ?? 0)}</td>
+                  <td className="text-right font-mono font-semibold">{formatQ(p.totalPorPagar ?? p.totalConIVA)}</td>
                   <td>
                     {p.estado === 'PAGADA'
                       ? <span className="badge-success">PAGADA</span>

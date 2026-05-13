@@ -111,7 +111,8 @@ function saveEnvio(body, user) {
     litros,
     monto === '' ? '' : monto,
     String(body.notas || ''),
-    user.id, user.nombre, new Date().toISOString()
+    user.id, user.nombre, new Date().toISOString(),
+    precioLitro, litros, 0, 'App'
   ]);
 
   try { verificarAlertasTanque(); } catch(e) {}
@@ -186,17 +187,26 @@ function editarEnvio(body, user) {
 }
 
 function _envioObj(row) {
+  var litrosEnviados = num(row[4]);
+  var montoTotal     = num(row[5]);
+  var precioLitro    = row[10] !== undefined && row[10] !== '' ? num(row[10]) : (litrosEnviados > 0 ? montoTotal / litrosEnviados : 0);
+  var litrosRecibidos = row[11] !== undefined && row[11] !== '' ? num(row[11]) : litrosEnviados;
+  var diferenciaLitros = row[12] !== undefined && row[12] !== '' ? num(row[12]) : (litrosRecibidos - litrosEnviados);
   return {
     id:              String(row[0]),
     fecha:           dateToString(row[1]),
     compradorId:     String(row[2]||''),
     compradorNombre: String(row[3]||''),
-    litrosEnviados:  num(row[4]),
-    montoTotal:      num(row[5]),
+    litrosEnviados:  litrosEnviados,
+    montoTotal:      montoTotal,
     notas:           String(row[6]||''),
     usuarioId:       String(row[7]||''),
     usuarioNombre:   String(row[8]||''),
     timestamp:       String(row[9]||''),
+    precioLitro:      Math.round(precioLitro * 1000000) / 1000000,
+    litrosRecibidos:  Math.round(litrosRecibidos * 10) / 10,
+    diferenciaLitros: Math.round(diferenciaLitros * 10) / 10,
+    origen:           String(row[13] || ''),
   };
 }
 
@@ -304,8 +314,12 @@ function getResumenFinancieroDia(body, user) {
   }};
 }
 
-function getDashboardFinanciero(user) {
-  var q      = calcularQuincena(null);
+function getDashboardFinanciero(body, user) {
+  if (!user) { user = body; body = {}; }
+  body = body || {};
+  var q      = body.fechaInicio && body.fechaFin
+    ? { inicio: String(body.fechaInicio), fin: String(body.fechaFin) }
+    : calcularQuincena(null);
   var inicio = q.inicio;
   var fin    = q.fin;
 
@@ -314,13 +328,19 @@ function getDashboardFinanciero(user) {
   var totalGastos = gastosRes ? (gastosRes.total || 0) : 0;
 
   var planillasRes    = getPlanillasQuincena({ quincenaInicio: inicio, quincenaFin: fin }, user).data || {};
-  var costoProveedores= num(planillasRes.totalConIVA);
+  var cierre          = getCierreQuincena_(inicio, fin);
+  if (cierre) totalGastos = num(cierre.gastosOperativos);
+  var costoProveedores= cierre ? num(cierre.totalPlanillas) : num(planillasRes.totalConIVA);
+  var adelantos       = cierre ? num(cierre.totalAdelantos) : num(planillasRes.totalAdelantos);
+  var totalPorPagar   = cierre ? num(cierre.totalPorPagar) : num(planillasRes.totalPorPagar);
 
-  var ingresos        = envios.reduce(function(s,e){ return s + e.montoTotal; }, 0);
+  var ingresos        = cierre ? num(cierre.totalVentas) : envios.reduce(function(s,e){ return s + e.montoTotal; }, 0);
   var litrosEnviados  = envios.reduce(function(s,e){ return s + e.litrosEnviados; }, 0);
-  var margen          = ingresos - costoProveedores - totalGastos;
+  var litrosVendidos  = cierre ? num(cierre.totalRecibidoCompradores) : envios.reduce(function(s,e){ return s + (e.litrosRecibidos || e.litrosEnviados); }, 0);
+  var diferenciaLitros= cierre ? num(cierre.diferenciaLitros) : (litrosVendidos - litrosEnviados);
+  var margen          = cierre ? num(cierre.margenBruto) : (ingresos - costoProveedores - totalGastos);
   var margenPct       = ingresos > 0 ? (margen / ingresos * 100) : 0;
-  var precioVenta     = litrosEnviados > 0 ? (ingresos / litrosEnviados) : 0;
+  var precioVenta     = litrosVendidos > 0 ? (ingresos / litrosVendidos) : 0;
 
   // Litros recibidos
   var cargasSheet = getSheet('Cargas');
@@ -337,9 +357,13 @@ function getDashboardFinanciero(user) {
     ingresos:             Math.round(ingresos*100)/100,
     costoProveedores:     Math.round(costoProveedores*100)/100,
     gastosOperativos:     Math.round(totalGastos*100)/100,
+    adelantos:            Math.round(adelantos*100)/100,
+    totalPorPagar:        Math.round(totalPorPagar*100)/100,
     margen:               Math.round(margen*100)/100,
     margenPct:            Math.round(margenPct*100)/100,
     litrosTotales:        Math.round(litrosEnviados*10)/10,
+    litrosVendidos:       Math.round(litrosVendidos*10)/10,
+    diferenciaLitros:     Math.round(diferenciaLitros*10)/10,
     litrosRecibidos:      Math.round(litrosRec*10)/10,
     precioPromedioCompra: Math.round(precioCompra*100)/100,
     precioPromedioVenta:  Math.round(precioVenta*100)/100,
@@ -353,8 +377,10 @@ function getResumenPorComprador(envios) {
   for (var i = 0; i < envios.length; i++) {
     var e    = envios[i];
     var name = e.compradorNombre || e.compradorId || 'Sin nombre';
-    if (!byComp[name]) byComp[name] = { nombre: name, litros: 0, monto: 0, dias: {}, entregas: 0 };
+    if (!byComp[name]) byComp[name] = { nombre: name, litros: 0, litrosRecibidos: 0, diferenciaLitros: 0, monto: 0, dias: {}, entregas: 0 };
     byComp[name].litros   += e.litrosEnviados;
+    byComp[name].litrosRecibidos += e.litrosRecibidos || e.litrosEnviados;
+    byComp[name].diferenciaLitros += e.diferenciaLitros || 0;
     byComp[name].monto    += e.montoTotal;
     byComp[name].dias[e.fecha] = true;
     byComp[name].entregas++;
@@ -364,12 +390,36 @@ function getResumenPorComprador(envios) {
     return {
       nombre:          c.nombre,
       litros:          Math.round(c.litros*10)/10,
+      litrosRecibidos: Math.round(c.litrosRecibidos*10)/10,
+      diferenciaLitros: Math.round(c.diferenciaLitros*10)/10,
       monto:           Math.round(c.monto*100)/100,
       diasEnvio:       Object.keys(c.dias).length,
       entregas:        c.entregas,
       precioImplicito: c.litros > 0 ? Math.round((c.monto/c.litros)*100)/100 : 0,
     };
   }).sort(function(a,b){ return b.monto - a.monto; });
+}
+
+function getCierreQuincena_(inicio, fin) {
+  var sheet = getSheet('CIERRES_QUINCENA');
+  var data  = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (dateToString(data[i][1]) === inicio && dateToString(data[i][2]) === fin) {
+      return {
+        totalRecepcion: num(data[i][4]),
+        totalEnviado: num(data[i][5]),
+        totalRecibidoCompradores: num(data[i][6]),
+        diferenciaLitros: num(data[i][7]),
+        totalVentas: num(data[i][8]),
+        totalPlanillas: num(data[i][9]),
+        totalAdelantos: num(data[i][10]),
+        totalPorPagar: num(data[i][11]),
+        gastosOperativos: num(data[i][12]),
+        margenBruto: num(data[i][13]),
+      };
+    }
+  }
+  return null;
 }
 
 function getResumenPorProveedor(fechaInicio, fechaFin) {

@@ -7,14 +7,22 @@
 
 function getTarifaProveedor(body, user) {
   var proveedorId = String(body.proveedorId || body.proveedor_id || '');
+  var fecha       = body.fecha ? String(body.fecha) : '';
   var sheet = getSheet('TARIFAS_PROVEEDORES');
   var data  = sheet.getDataRange().getValues();
+  var best = null;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    if (String(row[1]) === proveedorId && (row[5] === true || row[5] === 'true' || row[5] === 1)) {
-      return { success: true, data: { id: String(row[0]), proveedorId: String(row[1]), proveedorNombre: String(row[2]), precioLitro: num(row[3]), vigentDesde: String(row[4]) } };
+    if (String(row[1]) !== proveedorId) continue;
+    var vigente = dateToString(row[4]);
+    var activo = row[5] === true || row[5] === 'true' || row[5] === 1;
+    if (fecha) {
+      if (vigente && vigente <= fecha && (!best || vigente > dateToString(best[4]))) best = row;
+    } else if (activo) {
+      best = row;
     }
   }
+  if (best) return { success: true, data: { id: String(best[0]), proveedorId: String(best[1]), proveedorNombre: String(best[2]), precioLitro: num(best[3]), vigenteDesde: dateToString(best[4]) } };
   return { success: true, data: null };
 }
 
@@ -139,7 +147,7 @@ function generarPlanilla(body, user) {
   }
 
   // Get active tariff
-  var tarifaRes = getTarifaProveedor({ proveedorId: proveedorId }, user);
+  var tarifaRes = getTarifaProveedor({ proveedorId: proveedorId, fecha: qInicio }, user);
   if (!tarifaRes.data) return { success: false, error: 'No hay tarifa activa para este proveedor' };
   var precioLitro = num(tarifaRes.data.precioLitro);
 
@@ -201,6 +209,8 @@ function getPlanillasQuincena(body, user) {
   var data    = sheet.getDataRange().getValues();
   var lista   = [];
   var totalConIVA = 0;
+  var totalAdelantos = 0;
+  var totalPorPagar = 0;
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
@@ -209,8 +219,10 @@ function getPlanillasQuincena(body, user) {
     var planilla = _planillaObj(row);
     lista.push(planilla);
     totalConIVA += num(row[9]);
+    totalAdelantos += planilla.totalAdelantos;
+    totalPorPagar += planilla.totalPorPagar;
   }
-  return { success: true, data: { planillas: lista, totalConIVA: Math.round(totalConIVA * 100) / 100 } };
+  return { success: true, data: { planillas: lista, totalConIVA: Math.round(totalConIVA * 100) / 100, totalAdelantos: Math.round(totalAdelantos * 100) / 100, totalPorPagar: Math.round(totalPorPagar * 100) / 100 } };
 }
 
 function getPlanillasPorProveedor(body, user) {
@@ -226,6 +238,12 @@ function getPlanillasPorProveedor(body, user) {
 }
 
 function _planillaObj(row) {
+  var adelanto1 = num(row[13]);
+  var adelanto2 = num(row[14]);
+  var adelanto3 = num(row[15]);
+  var descuentos = num(row[16]);
+  var totalAdelantos = adelanto1 + adelanto2 + adelanto3 + descuentos;
+  var totalPorPagar = row[17] !== undefined && row[17] !== '' ? num(row[17]) : num(row[9]);
   return {
     id:              String(row[0]),
     quincenaInicio:  String(row[1]),
@@ -240,6 +258,13 @@ function _planillaObj(row) {
     estado:          String(row[10] || 'GENERADA'),
     fechaGenerada:   String(row[11] || ''),
     ivaAplicado:     row[12] === true || row[12] === 'true' || row[12] === 1,
+    adelanto1:        adelanto1,
+    adelanto2:        adelanto2,
+    adelanto3:        adelanto3,
+    descuentos:       descuentos,
+    totalAdelantos:   Math.round(totalAdelantos * 100) / 100,
+    totalPorPagar:    Math.round(totalPorPagar * 100) / 100,
+    origen:           String(row[18] || ''),
   };
 }
 

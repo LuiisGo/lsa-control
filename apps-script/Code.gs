@@ -31,6 +31,9 @@ var HOJAS = {
   CATEGORIAS_GASTOS: 'CATEGORIAS_GASTOS',
   ALERTAS_CONFIG:    'ALERTAS_CONFIG',
   ACCESOS:           'ACCESOS_PROVEEDORES',
+  AJUSTES_VENTA:     'AJUSTES_VENTA',
+  CIERRES_QUINCENA:  'CIERRES_QUINCENA',
+  IMPORT_LOG:        'IMPORT_LOG',
 };
 
 function doGet(e) {
@@ -118,7 +121,7 @@ function doPost(e) {
 
       // ── Fase 2: Dashboard financiero ──────────────────────
       case 'getResumenFinancieroDia': return respond(getResumenFinancieroDia(body, user));
-      case 'getDashboardFinanciero':  return respond(getDashboardFinanciero(user));
+      case 'getDashboardFinanciero':  return respond(getDashboardFinanciero(body, user));
 
       // ── Fase 2: Tarifas proveedores ───────────────────────
       case 'getTarifaProveedor': return respond(getTarifaProveedor(body, user));
@@ -133,6 +136,10 @@ function doPost(e) {
       case 'getPlanillasQuincena':     return respond(getPlanillasQuincena(body, user));
       case 'getPlanillasPorProveedor': return respond(getPlanillasPorProveedor(body, user));
       case 'getComparativaProveedores': return respond(getComparativaProveedores(body, user));
+
+      // ── Importaciones históricas ───────────────────────────
+      case 'migrateExcelFinanceSheets': return respond(migrateExcelFinanceSheets(user));
+      case 'importExcelAbril2026':      return respond(importExcelAbril2026(user));
 
       // ── Fase 2: Gastos ────────────────────────────────────
       case 'getCategorias':    return respond(getCategorias(user));
