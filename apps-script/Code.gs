@@ -140,6 +140,7 @@ function doPost(e) {
       // ── Importaciones históricas ───────────────────────────
       case 'migrateExcelFinanceSheets': return respond(migrateExcelFinanceSheets(user));
       case 'importExcelAbril2026':      return respond(importExcelAbril2026(user));
+      case 'limpiarDuplicadosProveedoresAbril2026': return respond(limpiarDuplicadosProveedoresAbril2026(user));
 
       // ── Fase 2: Gastos ────────────────────────────────────
       case 'getCategorias':    return respond(getCategorias(user));
