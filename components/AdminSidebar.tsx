@@ -8,6 +8,7 @@ import {
   BarChart2, Bell, Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PoweredByFutura } from '@/components/PoweredByFutura'
 
 interface Props {
   userName: string
@@ -153,10 +154,12 @@ export function AdminSidebar({ userName, userEmail }: Props) {
             <LogOut className="w-4 h-4" />
             Cerrar sesión
           </button>
-          <div className="mt-4 pt-3 border-t border-white/10 text-center">
-            <p className="text-[9px] text-primary-500 uppercase tracking-[2px]">Powered by</p>
-            <p className="text-[11px] text-primary-300 font-bold tracking-[3px] uppercase mt-0.5">FUTURA</p>
-          </div>
+          <PoweredByFutura
+            className="mt-4 pt-3 border-t border-white/10"
+            textClassName="text-[9px] text-primary-500 tracking-[2px]"
+            linkClassName="text-primary-300 hover:text-white"
+            compact
+          />
         </div>
       </aside>
     </>

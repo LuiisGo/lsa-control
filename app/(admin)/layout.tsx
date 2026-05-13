@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { AdminSidebar } from '@/components/AdminSidebar'
 import { BannerOffline } from '@/components/BannerOffline'
 import AuthProvider from '@/components/AuthProvider'
+import { PoweredByFutura } from '@/components/PoweredByFutura'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -20,6 +21,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <main className="lg:pl-64 pt-14 lg:pt-0">
           <div className="max-w-7xl mx-auto px-4 py-6 pb-24 lg:pb-8">
             {children}
+            <PoweredByFutura className="mt-10 pb-2" />
           </div>
         </main>
       </div>

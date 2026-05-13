@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { EmpleadoHeader } from '@/components/EmpleadoHeader'
 import { BannerOffline } from '@/components/BannerOffline'
 import AuthProvider from '@/components/AuthProvider'
+import { PoweredByFutura } from '@/components/PoweredByFutura'
 
 export default async function EmpleadoLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -17,11 +18,12 @@ export default async function EmpleadoLayout({ children }: { children: React.Rea
         <main className="flex-1 max-w-lg w-full mx-auto px-4 py-6 pb-36">
           {children}
         </main>
-        {/* POWERED BY FUTURA — footer fijo en mobile */}
-        <footer className="fixed bottom-0 left-0 right-0 z-20 bg-white/80 backdrop-blur border-t border-slate-100 py-2 text-center pointer-events-none">
-          <p className="text-[9px] text-slate-400 uppercase tracking-[2px]">
-            Powered by <span className="font-bold text-slate-500 tracking-[2px]">FUTURA</span>
-          </p>
+        <footer className="fixed bottom-0 left-0 right-0 z-20 bg-white/80 backdrop-blur border-t border-slate-100 py-2 text-center">
+          <PoweredByFutura
+            compact
+            textClassName="text-[9px] text-slate-400 tracking-[2px]"
+            linkClassName="text-slate-500 hover:text-primary-600"
+          />
         </footer>
       </div>
     </AuthProvider>

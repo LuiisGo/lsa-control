@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react'
+import { PoweredByFutura } from '@/components/PoweredByFutura'
 
 // toast was previously imported but only signIn errors are used now
 
@@ -187,15 +188,11 @@ export default function LoginPage() {
           </form>
         </div>
 
-        {/* ── Footer POWERED BY FUTURA ───────────────────── */}
-        <div className="mt-8 flex flex-col items-center gap-1">
-          <p className="text-primary-400 text-[10px] uppercase tracking-[3px] font-medium">
-            Powered by
-          </p>
-          <span className="text-white font-bold text-base tracking-[4px] uppercase">
-            FUTURA
-          </span>
-        </div>
+        <PoweredByFutura
+          className="mt-8"
+          textClassName="text-primary-400 tracking-[3px] font-medium"
+          linkClassName="text-white text-base tracking-[4px] hover:text-primary-100"
+        />
 
       </div>
     </div>
