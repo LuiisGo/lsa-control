@@ -1,20 +1,3 @@
-const { default: nextPWA, runtimeCaching } = require('@ducanh2912/next-pwa')
-
-const withPWA = nextPWA({
-  dest: 'public',
-  disable: process.env.NODE_ENV === 'development',
-  register: true,
-  skipWaiting: true,
-  workboxOptions: {
-    // Las páginas protegidas dependen de cookies/sesión. Si Workbox intenta
-    // resolverlas offline puede dejar errores `no-response` y pantallas viejas.
-    runtimeCaching: runtimeCaching.filter((entry) => {
-      const cacheName = entry.options && entry.options.cacheName
-      return !['pages', 'pages-rsc', 'pages-rsc-prefetch'].includes(cacheName)
-    }),
-  },
-})
-
 // Content Security Policy compacta para producción.
 // 'unsafe-inline' en script-src es necesario porque Next.js inyecta scripts inline
 // para hidratación. Si en el futuro se elimina con strict CSP + nonces, quitarlo.
@@ -59,4 +42,4 @@ const nextConfig = {
   },
 }
 
-module.exports = withPWA(nextConfig)
+module.exports = nextConfig
