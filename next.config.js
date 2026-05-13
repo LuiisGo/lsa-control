@@ -1,8 +1,18 @@
-const withPWA = require('@ducanh2912/next-pwa').default({
+const { default: nextPWA, runtimeCaching } = require('@ducanh2912/next-pwa')
+
+const withPWA = nextPWA({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   register: true,
   skipWaiting: true,
+  workboxOptions: {
+    // Las páginas protegidas dependen de cookies/sesión. Si Workbox intenta
+    // resolverlas offline puede dejar errores `no-response` y pantallas viejas.
+    runtimeCaching: runtimeCaching.filter((entry) => {
+      const cacheName = entry.options && entry.options.cacheName
+      return !['pages', 'pages-rsc', 'pages-rsc-prefetch'].includes(cacheName)
+    }),
+  },
 })
 
 // Content Security Policy compacta para producción.
@@ -12,7 +22,7 @@ const csp = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https://drive.google.com https://lh3.googleusercontent.com https://*.googleusercontent.com",
   "connect-src 'self' https://script.google.com https://script.googleusercontent.com",
   "frame-ancestors 'none'",

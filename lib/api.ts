@@ -18,6 +18,12 @@ export function buildApiRequestBody(
   return body
 }
 
+function handleSessionExpired(status: number) {
+  if (status !== 401 || typeof window === 'undefined') return
+  const next = encodeURIComponent(window.location.pathname + window.location.search)
+  window.location.assign(`/login?expired=1&next=${next}`)
+}
+
 /**
  * Central API call function.
  *
@@ -41,10 +47,12 @@ export async function apiCall<T = unknown>(
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
       body: JSON.stringify(body),
     })
 
     if (!res.ok) {
+      handleSessionExpired(res.status)
       throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     }
 
