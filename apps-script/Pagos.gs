@@ -214,8 +214,8 @@ function getPlanillasQuincena(body, user) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
-    if (qInicio && String(row[1]) !== qInicio) continue;
-    if (qFin    && String(row[2]) !== qFin)    continue;
+    if (qInicio && dateToString(row[1]) !== qInicio) continue;
+    if (qFin    && dateToString(row[2]) !== qFin)    continue;
     var planilla = _planillaObj(row);
     lista.push(planilla);
     totalConIVA += num(row[9]);
@@ -246,8 +246,8 @@ function _planillaObj(row) {
   var totalPorPagar = row[17] !== undefined && row[17] !== '' ? num(row[17]) : num(row[9]);
   return {
     id:              String(row[0]),
-    quincenaInicio:  String(row[1]),
-    quincenaFin:     String(row[2]),
+    quincenaInicio:  dateToString(row[1]),
+    quincenaFin:     dateToString(row[2]),
     proveedorId:     String(row[3]),
     proveedorNombre: String(row[4]),
     totalLitros:     num(row[5]),
