@@ -117,32 +117,24 @@ function saveEnvio(body, user) {
 
   try { verificarAlertasTanque(); } catch(e) {}
 
-  // Calculate resto
-  var cargasSheet  = getSheet('Cargas');
-  var cargasData   = cargasSheet.getDataRange().getValues();
-  var totalCargaDia = 0;
-  for (var i = 1; i < cargasData.length; i++) {
-    if (dateToString(cargasData[i][1]) === fecha) {
-      totalCargaDia += num(cargasData[i][6]);
+  var estadoTanques = calcularEstadoTanques_(fecha);
+  var result = {
+    success: true,
+    data: {
+      id: id,
+      precioLitro: precioLitro,
+      montoTotal: monto,
+      saldoInicial: estadoTanques.saldoInicialTotal,
+      totalCargaDia: estadoTanques.recepcionTotal,
+      totalDisponibleDia: estadoTanques.disponibleTotal,
+      totalEnviadoDia: estadoTanques.enviadoTotal,
+      resto: estadoTanques.restoTotal,
+      tanque1: estadoTanques.tanque1,
+      tanque2: estadoTanques.tanque2
     }
-  }
-
-  var enviosSheet   = getSheet('ENVIOS');
-  var enviosData    = enviosSheet.getDataRange().getValues();
-  var totalEnviadoDia = 0;
-  for (var j = 1; j < enviosData.length; j++) {
-    if (dateToString(enviosData[j][1]) === fecha) {
-      totalEnviadoDia += num(enviosData[j][4]);
-    }
-  }
-
-  totalCargaDia    = Math.round(totalCargaDia   * 10) / 10;
-  totalEnviadoDia  = Math.round(totalEnviadoDia * 10) / 10;
-  var resto        = Math.round((totalCargaDia - totalEnviadoDia) * 10) / 10;
-
-  var result = { success: true, data: { id: id, precioLitro: precioLitro, montoTotal: monto, totalCargaDia: totalCargaDia, totalEnviadoDia: totalEnviadoDia, resto: resto } };
-  if (totalEnviadoDia > totalCargaDia) {
-    result.data.advertencia = 'Total enviado supera la recepción del día';
+  };
+  if (estadoTanques.restoTotal < 0) {
+    result.data.advertencia = 'Se envió más leche de la que aparece disponible en tanques';
   }
   return result;
 }
@@ -272,34 +264,12 @@ function getResumenFinancieroDia(body, user) {
   var envios  = getEnviosPorFecha({ fecha: fecha }, user).data || [];
   var cargas  = getCargas({ fecha: fecha }, user).data || [];
   var gastosR = getGastosPorFecha({ fecha: fecha }, user).data || [];
+  var estadoTanques = calcularEstadoTanques_(fecha);
 
   var ingresos        = envios.reduce(function(s,e){ return s + e.montoTotal; }, 0);
   var litrosEnviados  = envios.reduce(function(s,e){ return s + e.litrosEnviados; }, 0);
   var litrosRecibidos = cargas.reduce(function(s,c){ return s + c.total; }, 0);
   var totalGastos     = gastosR.reduce(function(s,g){ return s + g.monto; }, 0);
-
-  // Litros from sheets for the "HOY" cards (resto calculation)
-  var hoyF = fecha; // fecha was already set above
-  var cargasSheet2 = getSheet('Cargas');
-  var cargasData2  = cargasSheet2.getDataRange().getValues();
-  var litrosRecepcionados = 0;
-  for (var ci = 1; ci < cargasData2.length; ci++) {
-    if (dateToString(cargasData2[ci][1]) === hoyF) {
-      litrosRecepcionados += num(cargasData2[ci][6]);
-    }
-  }
-
-  var enviosSheet2 = getSheet('ENVIOS');
-  var enviosData2  = enviosSheet2.getDataRange().getValues();
-  var litrosEnviadosTotal = 0;
-  for (var ei = 1; ei < enviosData2.length; ei++) {
-    if (dateToString(enviosData2[ei][1]) === hoyF) {
-      litrosEnviadosTotal += num(enviosData2[ei][4]);
-    }
-  }
-  litrosRecepcionados = Math.round(litrosRecepcionados * 10) / 10;
-  litrosEnviadosTotal = Math.round(litrosEnviadosTotal * 10) / 10;
-  var restoEstimado   = Math.round((litrosRecepcionados - litrosEnviadosTotal) * 10) / 10;
 
   return { success: true, data: {
     fecha:               fecha,
@@ -308,10 +278,124 @@ function getResumenFinancieroDia(body, user) {
     gastos:              Math.round(totalGastos*100)/100,
     margen:              Math.round((ingresos-totalGastos)*100)/100,
     enviosCount:         envios.length,
-    litrosRecepcionados: litrosRecepcionados,
-    litrosEnviados:      litrosEnviadosTotal,
-    restoEstimado:       restoEstimado,
+    saldoInicial:        estadoTanques.saldoInicialTotal,
+    saldoInicialT1:      estadoTanques.saldoInicialT1,
+    saldoInicialT2:      estadoTanques.saldoInicialT2,
+    litrosRecepcionados: estadoTanques.recepcionTotal,
+    recepcionT1:         estadoTanques.recepcionT1,
+    recepcionT2:         estadoTanques.recepcionT2,
+    litrosEnviados:      estadoTanques.enviadoTotal,
+    restoEstimado:       estadoTanques.restoTotal,
+    tanque1:             estadoTanques.tanque1,
+    tanque2:             estadoTanques.tanque2,
   }};
+}
+
+function calcularEstadoTanques_(fecha) {
+  fecha = String(fecha || getFechaHoy());
+
+  var remData = getSheet('REMANENTES').getDataRange().getValues();
+  var cargasData = getSheet('Cargas').getDataRange().getValues();
+  var enviosData = getSheet('ENVIOS').getDataRange().getValues();
+
+  var saldoInicialT1 = 0;
+  var saldoInicialT2 = 0;
+  var fechaInicio = fecha;
+  var mejorRemanenteFecha = '';
+
+  for (var r = 1; r < remData.length; r++) {
+    var remFecha = dateToString(remData[r][1]);
+    var estado = String(remData[r][6] || '');
+    if (!remFecha || remFecha >= fecha || estado === 'IGNORADO') continue;
+    if (!mejorRemanenteFecha || remFecha > mejorRemanenteFecha) {
+      mejorRemanenteFecha = remFecha;
+      fechaInicio = remFecha;
+      saldoInicialT1 = num(remData[r][2]);
+      saldoInicialT2 = num(remData[r][3]);
+    }
+  }
+
+  var tanque1 = saldoInicialT1;
+  var tanque2 = saldoInicialT2;
+  var recepcionT1Hoy = 0;
+  var recepcionT2Hoy = 0;
+  var enviadoHoy = 0;
+  var inicioHoyT1 = tanque1;
+  var inicioHoyT2 = tanque2;
+
+  var cursor = fechaInicio === fecha ? fecha : sumarDiasFecha_(fechaInicio, 1);
+  while (cursor <= fecha) {
+    if (cursor === fecha) {
+      inicioHoyT1 = tanque1;
+      inicioHoyT2 = tanque2;
+    }
+
+    var recepcionDiaT1 = 0;
+    var recepcionDiaT2 = 0;
+    for (var c = 1; c < cargasData.length; c++) {
+      if (dateToString(cargasData[c][1]) !== cursor) continue;
+      if (String(cargasData[c][3] || '') === 'Remanente día anterior') continue;
+      recepcionDiaT1 += num(cargasData[c][4]);
+      recepcionDiaT2 += num(cargasData[c][5]);
+    }
+
+    tanque1 += recepcionDiaT1;
+    tanque2 += recepcionDiaT2;
+    if (cursor === fecha) {
+      recepcionT1Hoy = recepcionDiaT1;
+      recepcionT2Hoy = recepcionDiaT2;
+    }
+
+    var enviadoDia = 0;
+    for (var e = 1; e < enviosData.length; e++) {
+      if (dateToString(enviosData[e][1]) === cursor) enviadoDia += num(enviosData[e][4]);
+    }
+    var despuesEnvio = restarDeTanques_(tanque1, tanque2, enviadoDia);
+    tanque1 = despuesEnvio.t1;
+    tanque2 = despuesEnvio.t2;
+    if (cursor === fecha) enviadoHoy = enviadoDia;
+
+    cursor = sumarDiasFecha_(cursor, 1);
+  }
+
+  return {
+    fecha: fecha,
+    saldoInicialT1: redondearLitros_(inicioHoyT1),
+    saldoInicialT2: redondearLitros_(inicioHoyT2),
+    saldoInicialTotal: redondearLitros_(inicioHoyT1 + inicioHoyT2),
+    recepcionT1: redondearLitros_(recepcionT1Hoy),
+    recepcionT2: redondearLitros_(recepcionT2Hoy),
+    recepcionTotal: redondearLitros_(recepcionT1Hoy + recepcionT2Hoy),
+    disponibleTotal: redondearLitros_(inicioHoyT1 + inicioHoyT2 + recepcionT1Hoy + recepcionT2Hoy),
+    enviadoTotal: redondearLitros_(enviadoHoy),
+    tanque1: redondearLitros_(tanque1),
+    tanque2: redondearLitros_(tanque2),
+    restoTotal: redondearLitros_(tanque1 + tanque2)
+  };
+}
+
+function restarDeTanques_(t1, t2, litros) {
+  var pendiente = num(litros);
+  var tomarT2 = Math.min(Math.max(t2, 0), pendiente);
+  t2 -= tomarT2;
+  pendiente -= tomarT2;
+  if (pendiente > 0) {
+    var tomarT1 = Math.min(Math.max(t1, 0), pendiente);
+    t1 -= tomarT1;
+    pendiente -= tomarT1;
+  }
+  if (pendiente > 0) t2 -= pendiente;
+  return { t1: t1, t2: t2 };
+}
+
+function sumarDiasFecha_(fecha, dias) {
+  var d = new Date(String(fecha) + 'T12:00:00');
+  d.setDate(d.getDate() + dias);
+  return dateToString(d);
+}
+
+function redondearLitros_(value) {
+  return Math.round(num(value) * 10) / 10;
 }
 
 function getDashboardFinanciero(body, user) {

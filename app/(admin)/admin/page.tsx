@@ -22,6 +22,9 @@ import toast from 'react-hot-toast'
 
 interface DashboardHoy {
   totalT1: number; totalT2: number; total: number
+  recepcionT1: number; recepcionT2: number; recepcionTotal: number
+  saldoInicial: number; saldoInicialT1: number; saldoInicialT2: number
+  enviadoHoy: number
   medicion: { litros_real_t1: number; litros_real_t2: number; total_real: number; diferencia_litros: number; diferencia_pct: number } | null
   cargas: Carga[]
 }
@@ -37,9 +40,16 @@ interface ResumenDia {
   gastos: number
   margen: number
   enviosCount: number
+  saldoInicial: number
+  saldoInicialT1: number
+  saldoInicialT2: number
   litrosRecepcionados: number
+  recepcionT1: number
+  recepcionT2: number
   litrosEnviados: number
   restoEstimado: number
+  tanque1: number
+  tanque2: number
 }
 
 // ─── Quincena helpers ────────────────────────────────────────────────────────
@@ -242,10 +252,10 @@ export default function AdminDashboardPage() {
           <Droplets className="w-4 h-4 text-primary-600" />Hoy
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <TarjetaMetrica titulo="Tanque 1" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.totalT1 ?? 0)} subtitulo="litros" isLoading={loadingHoy} />
-          <TarjetaMetrica titulo="Tanque 2" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.totalT2 ?? 0)} subtitulo="litros" isLoading={loadingHoy} />
-          <TarjetaMetrica titulo="Total hoy" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.total ?? 0)} subtitulo="litros" variant="primary" isLoading={loadingHoy} />
-          <TarjetaMetrica titulo="Pipa mañana" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.total ?? 0)} subtitulo="litros (= total hoy)" variant="primary" isLoading={loadingHoy} />
+          <TarjetaMetrica titulo="Tanque 1" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.totalT1 ?? 0)} subtitulo="hay ahora" isLoading={loadingHoy} />
+          <TarjetaMetrica titulo="Tanque 2" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.totalT2 ?? 0)} subtitulo="hay ahora" isLoading={loadingHoy} />
+          <TarjetaMetrica titulo="Total en tanque" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.total ?? 0)} subtitulo="disponible ahora" variant="primary" isLoading={loadingHoy} />
+          <TarjetaMetrica titulo="Para mañana" valor={loadingHoy ? '...' : formatLitrosNum(hoy?.total ?? 0)} subtitulo="si no se envía más" variant="primary" isLoading={loadingHoy} />
         </div>
 
         <div className="card mb-4">
@@ -292,9 +302,13 @@ export default function AdminDashboardPage() {
         {resumen && !loadingHoy && (
           <div className="card mb-4">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Movimiento del tanque</p>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="text-center">
-                <p className="text-xs text-slate-500">Recepcionado</p>
+                <p className="text-xs text-slate-500">Inicio</p>
+                <p className="font-mono font-semibold">{(resumen.saldoInicial ?? 0).toFixed(1)} L</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-slate-500">Recibido</p>
                 <p className="font-mono font-semibold">{(resumen.litrosRecepcionados ?? 0).toFixed(1)} L</p>
               </div>
               <div className="text-center">
@@ -302,10 +316,20 @@ export default function AdminDashboardPage() {
                 <p className="font-mono font-semibold">{(resumen.litrosEnviados ?? 0).toFixed(1)} L</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-slate-500">Resto</p>
+                <p className="text-xs text-slate-500">Queda</p>
                 <p className={`font-mono font-bold ${(resumen.restoEstimado ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                   {(resumen.restoEstimado ?? 0).toFixed(1)} L
                 </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
+                <p className="text-xs text-slate-500">Tanque 1 ahora</p>
+                <p className="font-mono font-semibold">{(resumen.tanque1 ?? 0).toFixed(1)} L</p>
+              </div>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-center">
+                <p className="text-xs text-slate-500">Tanque 2 ahora</p>
+                <p className="font-mono font-semibold">{(resumen.tanque2 ?? 0).toFixed(1)} L</p>
               </div>
             </div>
           </div>

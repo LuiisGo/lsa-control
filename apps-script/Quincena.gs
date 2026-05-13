@@ -6,19 +6,21 @@ function getDashboardHoy(user) {
   var fecha  = getFechaHoy();
   var cargas = getCargas({ fecha: fecha }, user).data || [];
   var med    = getMedicion({ fecha: fecha }, user).data;
-
-  var totalT1 = 0, totalT2 = 0;
-  cargas.forEach(function(c) {
-    totalT1 += num(c.litrosT1 || c.litros_t1);
-    totalT2 += num(c.litrosT2 || c.litros_t2);
-  });
+  var estadoTanques = calcularEstadoTanques_(fecha);
 
   return {
     success: true,
     data: {
-      totalT1:  Math.round(totalT1 * 100) / 100,
-      totalT2:  Math.round(totalT2 * 100) / 100,
-      total:    Math.round((totalT1 + totalT2) * 100) / 100,
+      totalT1:  estadoTanques.tanque1,
+      totalT2:  estadoTanques.tanque2,
+      total:    estadoTanques.restoTotal,
+      recepcionT1: estadoTanques.recepcionT1,
+      recepcionT2: estadoTanques.recepcionT2,
+      recepcionTotal: estadoTanques.recepcionTotal,
+      saldoInicialT1: estadoTanques.saldoInicialT1,
+      saldoInicialT2: estadoTanques.saldoInicialT2,
+      saldoInicial: estadoTanques.saldoInicialTotal,
+      enviadoHoy: estadoTanques.enviadoTotal,
       medicion: med ? {
         litros_real_t1:    num(med.litrosRealT1 || med.litros_real_t1),
         litros_real_t2:    num(med.litrosRealT2 || med.litros_real_t2),
