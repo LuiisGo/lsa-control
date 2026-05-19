@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { isAllowedApiAction, isPublicApiAction } from '@/lib/apiActions'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL!
-const PUBLIC_ACTIONS = new Set(['login', 'portalLogin', 'portalData'])
 
 function noStoreJson(body: unknown, init?: ResponseInit) {
   const res = NextResponse.json(body, init)
@@ -33,7 +33,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const action = String(body.action || '')
 
-    if (!PUBLIC_ACTIONS.has(action)) {
+    if (!isAllowedApiAction(action)) {
+      return noStoreJson(
+        { success: false, error: 'Acción no permitida' },
+        { status: 400 }
+      )
+    }
+
+    if (!isPublicApiAction(action)) {
       const sessionToken = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
       const apiToken = typeof sessionToken?.apiToken === 'string' ? sessionToken.apiToken : ''
       if (!apiToken) {
@@ -60,13 +67,16 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await res.json()
-    if (!PUBLIC_ACTIONS.has(action) && isExpiredTokenError(data)) {
+    if (!isPublicApiAction(action) && isExpiredTokenError(data)) {
       return noStoreJson(data, { status: 401 })
     }
     return noStoreJson(data)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error en proxy'
     console.error('[proxy]', message)
-    return noStoreJson({ success: false, error: message }, { status: 500 })
+    return noStoreJson(
+      { success: false, error: process.env.NODE_ENV === 'production' ? 'Error procesando la solicitud' : message },
+      { status: 500 }
+    )
   }
 }

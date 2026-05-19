@@ -55,9 +55,11 @@ function saveGasto(body, user) {
 
   var categoriaId     = String(body.categoriaId     || body.categoria_id     || '');
   var categoriaNombre = String(body.categoriaNombre || body.categoria_nombre || '');
-  var descripcion     = String(body.descripcion     || '');
+  var descripcion     = String(body.descripcion     || '').trim();
   var ivaIncluido     = body.ivaIncluido === true || body.ivaIncluido === 'true' || body.iva_incluido === true;
   var comprobanteUrl  = String(body.comprobanteUrl  || body.comprobante_url  || '');
+  if (!categoriaId || !categoriaNombre) return { success: false, error: 'Categoría requerida' };
+  if (!descripcion) return { success: false, error: 'Descripción requerida' };
 
   var id = generateId();
   getSheet('GASTOS').appendRow([
@@ -82,7 +84,6 @@ function getGastosPorFecha(body, user) {
 function getGastosPorRango(body, user) {
   var inicio = String(body.fechaInicio || body.inicio || '');
   var fin    = String(body.fechaFin    || body.fin    || '');
-  if (!inicio || !fin) return { success: false, error: 'Rango requerido' };
 
   var sheet = getSheet('GASTOS');
   var data  = sheet.getDataRange().getValues();
@@ -92,15 +93,16 @@ function getGastosPorRango(body, user) {
 
   for (var i = 1; i < data.length; i++) {
     var f = dateToString(data[i][1]);
-    if (f >= inicio && f <= fin) {
-      var g = _gastoObj(data[i]);
-      lista.push(g);
-      total += g.monto;
-      var cat = g.categoriaNombre || g.categoriaId || 'Sin categoría';
-      if (!byCategoria[cat]) byCategoria[cat] = 0;
-      byCategoria[cat] += g.monto;
-    }
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    var g = _gastoObj(data[i]);
+    lista.push(g);
+    total += g.monto;
+    var cat = g.categoriaNombre || g.categoriaId || 'Sin categoría';
+    if (!byCategoria[cat]) byCategoria[cat] = 0;
+    byCategoria[cat] += g.monto;
   }
+  lista.sort(function(a,b){ return b.fecha > a.fecha ? 1 : -1; });
 
   var desglose = Object.keys(byCategoria).map(function(k) {
     return { categoria: k, total: Math.round(byCategoria[k] * 100) / 100 };
@@ -122,8 +124,16 @@ function editarGasto(body, user) {
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(body.id)) {
-      if (body.descripcion !== undefined) sheet.getRange(i+1, 5).setValue(sanitizarValor(String(body.descripcion)));
-      if (body.monto       !== undefined) sheet.getRange(i+1, 6).setValue(num(body.monto));
+      if (body.descripcion !== undefined) {
+        var desc = String(body.descripcion || '').trim();
+        if (!desc) return { success: false, error: 'Descripción requerida' };
+        sheet.getRange(i+1, 5).setValue(sanitizarValor(desc));
+      }
+      if (body.monto       !== undefined) {
+        var monto = num(body.monto);
+        if (monto <= 0) return { success: false, error: 'Monto debe ser > 0' };
+        sheet.getRange(i+1, 6).setValue(monto);
+      }
       if (body.ivaIncluido !== undefined) sheet.getRange(i+1, 7).setValue(!!body.ivaIncluido);
       return { success: true };
     }
