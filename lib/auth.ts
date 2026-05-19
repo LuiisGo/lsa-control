@@ -21,12 +21,18 @@ export const authOptions: NextAuthOptions = {
           role: 'admin' | 'empleado'
           permisos: string[]
         }>('login', {
-          email: credentials.username,    // el backend recibe el campo como "email"
-          username: credentials.username, // por si el backend acepta "username"
+          email: credentials.username,
+          username: credentials.username,
           password: credentials.password,
         })
 
-        if (!res.success || !res.data) return null
+        if (!res.success || !res.data) {
+          const err = res.error ?? ''
+          if (err.includes('HTTP 4') || err.includes('HTTP 5') || err.includes('Error de red')) {
+            throw new Error('Error de conexión con el servidor')
+          }
+          return null
+        }
 
         return {
           id: res.data.userId,

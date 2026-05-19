@@ -26,7 +26,7 @@ function saveCategoria(body, user) {
   var nombre = String(body.nombre||'').trim();
   if (!nombre) return { success: false, error: 'Nombre requerido' };
   var id = generateId();
-  getSheet('CATEGORIAS_GASTOS').appendRow([id, nombre, true]);
+  getSheet('CATEGORIAS_GASTOS').appendRow([id, sanitizarValor(nombre), true]);
   return { success: true, data: { id: id } };
 }
 
@@ -61,9 +61,9 @@ function saveGasto(body, user) {
 
   var id = generateId();
   getSheet('GASTOS').appendRow([
-    id, getFechaHoy(), categoriaId, categoriaNombre,
-    descripcion, monto, ivaIncluido,
-    user.id, user.nombre, comprobanteUrl,
+    id, getFechaHoy(), sanitizarValor(categoriaId), sanitizarValor(categoriaNombre),
+    sanitizarValor(descripcion), monto, ivaIncluido,
+    user.id, user.nombre, sanitizarValor(comprobanteUrl),
   ]);
   return { success: true, data: { id: id } };
 }
@@ -122,7 +122,7 @@ function editarGasto(body, user) {
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(body.id)) {
-      if (body.descripcion !== undefined) sheet.getRange(i+1, 5).setValue(String(body.descripcion));
+      if (body.descripcion !== undefined) sheet.getRange(i+1, 5).setValue(sanitizarValor(String(body.descripcion)));
       if (body.monto       !== undefined) sheet.getRange(i+1, 6).setValue(num(body.monto));
       if (body.ivaIncluido !== undefined) sheet.getRange(i+1, 7).setValue(!!body.ivaIncluido);
       return { success: true };
@@ -138,7 +138,7 @@ function deleteGasto(body, user) {
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(body.id)) {
       var anterior = _gastoObj(data[i]);
-      registrarLog(user, 'DELETE_GASTO', 'GASTOS', body.id, JSON.stringify(anterior), '');
+      registrarLog(user, 'DELETE_GASTO', 'GASTOS', body.id, anterior, '');
       sheet.deleteRow(i + 1);
       return { success: true };
     }

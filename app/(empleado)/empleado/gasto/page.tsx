@@ -78,7 +78,7 @@ export default function GastoPage() {
         toast.success('Gasto registrado')
         router.push('/empleado')
       } else {
-        throw new Error(res.error)
+        toast.error(res.error || 'Error al guardar el gasto')
       }
     } catch {
       await savePendingGasto({ categoriaId, categoriaNombre, descripcion, monto: parseFloat(monto) || 0, ivaIncluido, foto_base64: fotoBase64 })

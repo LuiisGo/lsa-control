@@ -71,17 +71,21 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        const rl = readRateLimit()
-        const attempts = rl.attempts + 1
-        const next: RateLimit = attempts >= MAX_ATTEMPTS
-          ? { attempts: 0, lockedUntil: Date.now() + LOCKOUT_MS }
-          : { attempts, lockedUntil: 0 }
-        writeRateLimit(next)
-        if (next.lockedUntil) {
-          setLockoutUntil(next.lockedUntil)
-          setError('Demasiados intentos. Esperá 5 minutos antes de intentar de nuevo.')
+        if (result.error === 'Error de conexión con el servidor') {
+          setError('No se pudo conectar al servidor. Verificá tu conexión o intentá más tarde.')
         } else {
-          setError(`Usuario o contraseña incorrectos (${MAX_ATTEMPTS - attempts} intento${MAX_ATTEMPTS - attempts === 1 ? '' : 's'} restante${MAX_ATTEMPTS - attempts === 1 ? '' : 's'})`)
+          const rl = readRateLimit()
+          const attempts = rl.attempts + 1
+          const next: RateLimit = attempts >= MAX_ATTEMPTS
+            ? { attempts: 0, lockedUntil: Date.now() + LOCKOUT_MS }
+            : { attempts, lockedUntil: 0 }
+          writeRateLimit(next)
+          if (next.lockedUntil) {
+            setLockoutUntil(next.lockedUntil)
+            setError('Demasiados intentos. Esperá 5 minutos antes de intentar de nuevo.')
+          } else {
+            setError(`Usuario o contraseña incorrectos (${MAX_ATTEMPTS - attempts} intento${MAX_ATTEMPTS - attempts === 1 ? '' : 's'} restante${MAX_ATTEMPTS - attempts === 1 ? '' : 's'})`)
+          }
         }
       } else if (result?.ok) {
         writeRateLimit({ attempts: 0, lockedUntil: 0 })

@@ -3,7 +3,7 @@
 // ============================================================
 
 function initSheets() {
-  var ss = SpreadsheetApp.openById('1R6IXVYnA9P30zHUwnHCMbyXCIxR5ReMCgmXcOe1k82c');
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   function ensureSheet(name, headers) {
     var sheet = ss.getSheetByName(name);

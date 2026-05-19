@@ -58,7 +58,7 @@ function generarAccesoProveedor(body, user) {
 
   // Create new
   var id = generateId();
-  sheet.appendRow([id, proveedorId, proveedorNombre, codigo, token, true]);
+  sheet.appendRow([id, sanitizarValor(proveedorId), sanitizarValor(proveedorNombre), codigo, token, true]);
   return { success: true, data: { id: id, codigoAcceso: codigo, linkToken: token } };
 }
 
