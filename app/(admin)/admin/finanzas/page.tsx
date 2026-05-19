@@ -4,6 +4,8 @@ import { useSession } from 'next-auth/react'
 import { RefreshCw, TrendingUp, TrendingDown, Droplets, DollarSign } from 'lucide-react'
 import { apiCall } from '@/lib/api'
 import { TarjetaMetrica } from '@/components/TarjetaMetrica'
+import { DateRangeFilter } from '@/components/DateRangeFilter'
+import type { DateRange } from '@/lib/dateRange'
 import dynamic from 'next/dynamic'
 const GraficaDonutSimple = dynamic(() => import('@/components/GraficaDonutInner'), { ssr: false })
 import { formatQ, getQuincenasRecientes } from '@/lib/utils'
@@ -36,20 +38,20 @@ export default function FinanzasPage() {
   const [data, setData] = useState<DashboardFinanciero | null>(null)
   const [loading, setLoading] = useState(true)
   const [qIdx, setQIdx] = useState(0)
-  const q = quincenas[qIdx]
+  const [range, setRange] = useState<DateRange>({ fechaInicio: quincenas[0].inicio, fechaFin: quincenas[0].fin })
 
-  async function loadData() {
-    if (!token || !q) return
+  async function loadData(nextRange = range) {
+    if (!token) return
     setLoading(true)
     try {
-      const res = await apiCall<DashboardFinanciero>('getDashboardFinanciero', { fechaInicio: q.inicio, fechaFin: q.fin }, token)
+      const res = await apiCall<DashboardFinanciero>('getDashboardFinanciero', nextRange, token)
       if (res.success && res.data) setData(res.data)
       else toast.error('Error al cargar finanzas')
     } catch { toast.error('Error de conexión') }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { loadData() }, [token, qIdx]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadData() }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const margenPositivo = (data?.margen ?? 0) >= 0
 
@@ -61,12 +63,35 @@ export default function FinanzasPage() {
           {data && <p className="text-sm text-slate-500">{data.quincena.inicio} — {data.quincena.fin}</p>}
         </div>
         <div className="flex items-center gap-2">
-          <select className="input max-w-xs" value={qIdx} onChange={e => setQIdx(parseInt(e.target.value))}>
+          <select
+            className="input max-w-xs"
+            value={qIdx}
+            onChange={e => {
+              const idx = parseInt(e.target.value)
+              const next = { fechaInicio: quincenas[idx].inicio, fechaFin: quincenas[idx].fin }
+              setQIdx(idx)
+              setRange(next)
+              loadData(next)
+            }}
+          >
             {quincenas.map((item, i) => <option key={i} value={i}>{item.label}</option>)}
           </select>
-          <button onClick={loadData} className="btn-ghost btn-icon"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
+          <button onClick={() => loadData()} className="btn-ghost btn-icon"><RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /></button>
         </div>
       </div>
+
+      <DateRangeFilter
+        value={range}
+        disabled={loading}
+        allowOpenRange={false}
+        onApply={next => { setRange(next); loadData(next) }}
+        onClear={() => {
+          const next = { fechaInicio: quincenas[0].inicio, fechaFin: quincenas[0].fin }
+          setQIdx(0)
+          setRange(next)
+          loadData(next)
+        }}
+      />
 
       {/* Tarjetas principales */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -92,7 +117,7 @@ export default function FinanzasPage() {
             <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="skeleton h-10 w-full" />)}</div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="table">
+              <table className="data-table min-w-full">
                 <thead>
                   <tr>
                     <th>Comprador</th>
@@ -150,7 +175,7 @@ export default function FinanzasPage() {
           <div className="skeleton h-24 w-full" />
         ) : (
           <div className="overflow-x-auto">
-            <table className="table">
+            <table className="data-table min-w-full">
               <thead>
                 <tr>
                   <th>Proveedor</th>
