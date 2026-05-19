@@ -108,6 +108,32 @@ function getCargas(body, user) {
   return { success: true, data: cargas };
 }
 
+function getCargasPorRango(body, user) {
+  var inicio = String(body.fechaInicio || body.inicio || '');
+  var fin    = String(body.fechaFin    || body.fin    || '');
+  var sheet  = getSheet('Cargas');
+  var data   = sheet.getDataRange().getValues();
+  var cargas = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var f = dateToString(row[1]);
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    cargas.push({
+      id: String(row[0]), fecha: f,
+      hora: String(row[2]||''), proveedor: String(row[3]||''),
+      litros_t1: num(row[4]), litros_t2: num(row[5]), total: num(row[6]),
+      foto_url: String(row[7]||''), proveedor_id: String(row[8]||''),
+    });
+  }
+  cargas.sort(function(a, b) {
+    var af = a.fecha + ' ' + (a.hora || '');
+    var bf = b.fecha + ' ' + (b.hora || '');
+    return bf > af ? 1 : -1;
+  });
+  return { success: true, data: cargas };
+}
+
 function saveCarga(body, user) {
   if (!tienePermiso(user, 'cargas')) return { success: false, error: 'Sin permiso para registrar cargas' };
   var t1 = num(body.litros_t1), t2 = num(body.litros_t2);
@@ -211,6 +237,7 @@ function saveMedicion(body, user) {
   var sheet    = getSheet('Mediciones');
   var id       = generateId();
   var t1       = num(body.litros_real_t1), t2 = num(body.litros_real_t2);
+  if (t1 < 0 || t2 < 0) return { success: false, error: 'Litros no pueden ser negativos' };
   var total    = t1 + t2;
   var cargasH  = getCargasTotales(fecha);
   var dif      = total - cargasH;
@@ -221,6 +248,7 @@ function saveMedicion(body, user) {
 }
 
 function editarMedicion(body, user) {
+  if (!tienePermiso(user, 'medicion') && user.role !== 'admin') return { success: false, error: 'Sin permisos para editar mediciones' };
   var fecha = body.fecha || getToday();
   var sheet = getSheet('Mediciones');
   var data  = sheet.getDataRange().getValues();
@@ -228,6 +256,7 @@ function editarMedicion(body, user) {
     if (dateToString(data[i][1]) === fecha) {
       var t1     = num(body.litros_real_t1 !== undefined ? body.litros_real_t1 : data[i][2]);
       var t2     = num(body.litros_real_t2 !== undefined ? body.litros_real_t2 : data[i][3]);
+      if (t1 < 0 || t2 < 0) return { success: false, error: 'Litros no pueden ser negativos' };
       var total  = t1 + t2;
       var cargasT= getCargasTotales(fecha);
       var dif    = total - cargasT;
@@ -241,6 +270,28 @@ function editarMedicion(body, user) {
     }
   }
   return { success: false, error: 'Medicion no encontrada' };
+}
+
+function getMedicionesPorRango(body, user) {
+  var inicio = String(body.fechaInicio || body.inicio || '');
+  var fin    = String(body.fechaFin    || body.fin    || '');
+  var sheet = getSheet('Mediciones');
+  var data  = sheet.getDataRange().getValues();
+  var lista = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var f = dateToString(row[1]);
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    lista.push({
+      fecha: f,
+      litros_real_t1: num(row[2]), litros_real_t2: num(row[3]),
+      total_real: num(row[4]), diferencia_litros: num(row[5]),
+      diferencia_pct: num(row[6]), foto_url: String(row[7]||''),
+    });
+  }
+  lista.sort(function(a, b){ return b.fecha > a.fecha ? 1 : -1; });
+  return { success: true, data: lista };
 }
 
 function deleteMedicion(body, user) {
@@ -408,7 +459,14 @@ function getUsuarios(user) {
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     if (!row[0]) continue;
-    lista.push({ id: String(row[0]), nombre: String(row[1]||''), username: String(row[2]||''), role: String(row[4]||'empleado'), activo: row[5] !== false && row[5] !== 'false' && row[5] !== 0 });
+    lista.push({
+      id: String(row[0]),
+      nombre: String(row[1]||''),
+      username: String(row[2]||''),
+      role: String(row[4]||'empleado'),
+      activo: row[5] !== false && row[5] !== 'false' && row[5] !== 0,
+      permisos: _parsePermisos(String(row[9] || '')),
+    });
   }
   return { success: true, data: lista };
 }
@@ -498,19 +556,18 @@ function deleteUsuario(body, user) {
 
 function getCargasPorProveedor(body, user) {
   var inicio = String(body.fechaInicio||''), fin = String(body.fechaFin||'');
-  if (!inicio || !fin) return { success: false, error: 'Rango de fechas requerido' };
   var sheet  = getSheet('Cargas');
   var data   = sheet.getDataRange().getValues();
   var byProv = {};
   for (var i = 1; i < data.length; i++) {
     var f = dateToString(data[i][1]);
-    if (f >= inicio && f <= fin) {
-      var prov = String(data[i][3]||'Sin proveedor');
-      if (!byProv[prov]) byProv[prov] = { proveedor: prov, t1: 0, t2: 0, total: 0 };
-      byProv[prov].t1    += num(data[i][4]);
-      byProv[prov].t2    += num(data[i][5]);
-      byProv[prov].total += num(data[i][6]);
-    }
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    var prov = String(data[i][3]||'Sin proveedor');
+    if (!byProv[prov]) byProv[prov] = { proveedor: prov, t1: 0, t2: 0, total: 0 };
+    byProv[prov].t1    += num(data[i][4]);
+    byProv[prov].t2    += num(data[i][5]);
+    byProv[prov].total += num(data[i][6]);
   }
   var result = Object.keys(byProv).map(function(k) {
     var p = byProv[k];

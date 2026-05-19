@@ -21,7 +21,7 @@ function saveComprador(body, user) {
   var nombre = String(body.nombre||'').trim();
   if (!nombre) return { success: false, error: 'Nombre requerido' };
   var id = generateId();
-  getSheet('COMPRADORES').appendRow([id, nombre, String(body.nit||''), true]);
+  getSheet('COMPRADORES').appendRow([id, sanitizarValor(nombre), sanitizarValor(body.nit||''), true]);
   return { success: true, data: { id: id } };
 }
 
@@ -63,7 +63,7 @@ function savePrecioComprador(body, user) {
   var compradorId = String(body.compradorId||'');
   var fecha       = String(body.fecha || getFechaHoy());
   var precio      = num(body.precioLitro || body.precio_litro);
-  if (!compradorId || precio <= 0) return { success: false, error: 'Datos inválidos' };
+  if (!compradorId || !fecha || precio <= 0) return { success: false, error: 'Datos inválidos' };
   var id = generateId();
   getSheet('PRECIOS_COMPRADOR').appendRow([id, compradorId, fecha, precio]);
   return { success: true, data: { id: id } };
@@ -103,6 +103,17 @@ function saveEnvio(body, user) {
 
   var id    = generateId();
   var fecha = getFechaHoy();
+  var estadoAntes = calcularEstadoTanques_(fecha);
+  if (estadoAntes.restoTotal - litros < 0) {
+    return {
+      success: false,
+      error: 'No hay suficiente leche disponible en tanques para registrar este envío',
+      data: {
+        disponible: estadoAntes.restoTotal,
+        solicitado: litros,
+      }
+    };
+  }
 
   getSheet('ENVIOS').appendRow([
     id, fecha,
@@ -110,7 +121,7 @@ function saveEnvio(body, user) {
     String(body.compradorNombre || body.comprador_nombre || ''),
     litros,
     monto === '' ? '' : monto,
-    String(body.notas || ''),
+    sanitizarValor(body.notas || ''),
     user.id, user.nombre, new Date().toISOString(),
     precioLitro, litros, 0, 'App'
   ]);
@@ -152,14 +163,20 @@ function getEnviosPorFecha(body, user) {
 
 function getEnviosPorRango(body, user) {
   var inicio = String(body.fechaInicio||''), fin = String(body.fechaFin||'');
-  if (!inicio || !fin) return { success: false, error: 'Rango requerido' };
   var sheet = getSheet('ENVIOS');
   var data  = sheet.getDataRange().getValues();
   var lista = [];
   for (var i = 1; i < data.length; i++) {
     var f = dateToString(data[i][1]);
-    if (f >= inicio && f <= fin) lista.push(_envioObj(data[i]));
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    lista.push(_envioObj(data[i]));
   }
+  lista.sort(function(a,b) {
+    var at = a.fecha + ' ' + (a.timestamp || '');
+    var bt = b.fecha + ' ' + (b.timestamp || '');
+    return bt > at ? 1 : -1;
+  });
   return { success: true, data: lista };
 }
 
@@ -169,9 +186,19 @@ function editarEnvio(body, user) {
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(body.id)) {
-      if (body.litrosEnviados !== undefined) sheet.getRange(i+1,5).setValue(num(body.litrosEnviados));
-      if (body.montoTotal     !== undefined) sheet.getRange(i+1,6).setValue(num(body.montoTotal));
-      if (body.notas          !== undefined) sheet.getRange(i+1,7).setValue(String(body.notas));
+      var oldLitros = num(data[i][4]);
+      var nextLitros = body.litrosEnviados !== undefined ? num(body.litrosEnviados) : oldLitros;
+      var nextMonto = body.montoTotal !== undefined ? num(body.montoTotal) : num(data[i][5]);
+      if (nextLitros <= 0) return { success: false, error: 'Litros debe ser > 0' };
+      if (nextMonto <= 0) return { success: false, error: 'Monto debe ser > 0' };
+      var fechaEnvio = dateToString(data[i][1]);
+      var estado = calcularEstadoTanques_(fechaEnvio);
+      if (estado.restoTotal + oldLitros - nextLitros < 0) {
+        return { success: false, error: 'No hay suficiente leche disponible para este ajuste' };
+      }
+      sheet.getRange(i+1,5).setValue(nextLitros);
+      sheet.getRange(i+1,6).setValue(nextMonto);
+      if (body.notas !== undefined) sheet.getRange(i+1,7).setValue(sanitizarValor(body.notas));
       return { success: true };
     }
   }
@@ -207,6 +234,7 @@ function _envioObj(row) {
 function saveRemanente(body, user) {
   if (!tienePermiso(user, 'remanentes')) return { success: false, error: 'Sin permiso para registrar remanentes' };
   var t1 = num(body.litrosT1||body.litros_t1), t2 = num(body.litrosT2||body.litros_t2);
+  if (t1 < 0 || t2 < 0) return { success: false, error: 'Litros no pueden ser negativos' };
   if (t1 + t2 <= 0) return { success: false, error: 'Total remanente debe ser > 0' };
   var id = generateId();
   getSheet('REMANENTES').appendRow([id, getFechaHoy(), t1, t2, t1+t2, false, '']);
@@ -230,6 +258,7 @@ function getRemanentePendiente(user) {
 }
 
 function usarRemanente(body, user) {
+  if (!tienePermiso(user, 'remanentes')) return { success: false, error: 'Sin permiso para usar remanentes' };
   var sheet = getSheet('REMANENTES');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {
@@ -245,6 +274,7 @@ function usarRemanente(body, user) {
 }
 
 function ignorarRemanente(body, user) {
+  if (!tienePermiso(user, 'remanentes')) return { success: false, error: 'Sin permiso para ignorar remanentes' };
   var sheet = getSheet('REMANENTES');
   var data  = sheet.getDataRange().getValues();
   for (var i = 1; i < data.length; i++) {

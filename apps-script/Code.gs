@@ -71,12 +71,14 @@ function doPost(e) {
 
       // ── Fase 1: Cargas ────────────────────────────────────
       case 'getCargas':    return respond(getCargas(body, user));
+      case 'getCargasPorRango': return respond(getCargasPorRango(body, user));
       case 'saveCarga':    return respond(saveCarga(body, user));
       case 'editarCarga':  return respond(editarCarga(body, user));
       case 'deleteCarga':  return respond(deleteCarga(body, user));
 
       // ── Fase 1: Mediciones ────────────────────────────────
       case 'getMedicion':    return respond(getMedicion(body, user));
+      case 'getMedicionesPorRango': return respond(getMedicionesPorRango(body, user));
       case 'saveMedicion':   return respond(saveMedicion(body, user));
       case 'editarMedicion': return respond(editarMedicion(body, user));
       case 'deleteMedicion': return respond(deleteMedicion(body, user));

@@ -273,7 +273,6 @@ function _planillaObj(row) {
 function getComparativaProveedores(body, user) {
   var inicio = String(body.fechaInicio || body.inicio || '');
   var fin    = String(body.fechaFin    || body.fin    || '');
-  if (!inicio || !fin) return { success: false, error: 'Rango de fechas requerido' };
 
   var sheet  = getSheet('Cargas');
   var data   = sheet.getDataRange().getValues();
@@ -283,12 +282,12 @@ function getComparativaProveedores(body, user) {
     var f    = dateToString(data[i][1]);
     var prov = String(data[i][3] || 'Sin proveedor');
     if (prov === 'Remanente día anterior') continue;
-    if (f >= inicio && f <= fin) {
-      if (!byProv[prov]) byProv[prov] = { nombre: prov, litros: 0, entregas: 0, dias: {} };
-      byProv[prov].litros   += num(data[i][6]);
-      byProv[prov].entregas++;
-      byProv[prov].dias[f] = true;
-    }
+    if (inicio && f < inicio) continue;
+    if (fin && f > fin) continue;
+    if (!byProv[prov]) byProv[prov] = { nombre: prov, litros: 0, entregas: 0, dias: {} };
+    byProv[prov].litros   += num(data[i][6]);
+    byProv[prov].entregas++;
+    byProv[prov].dias[f] = true;
   }
 
   // Calculate total for participation %
@@ -299,8 +298,11 @@ function getComparativaProveedores(body, user) {
     var p         = byProv[k];
     var diasActivos = Object.keys(p.dias).length;
     // Days in range
-    var d1 = new Date(inicio + 'T12:00:00');
-    var d2 = new Date(fin + 'T12:00:00');
+    var fechas = Object.keys(p.dias).sort();
+    var inicioCalc = inicio || fechas[0];
+    var finCalc = fin || fechas[fechas.length - 1];
+    var d1 = new Date(inicioCalc + 'T12:00:00');
+    var d2 = new Date(finCalc + 'T12:00:00');
     var diasRango = Math.max(1, Math.round((d2 - d1) / (1000*60*60*24)) + 1);
     return {
       nombre:          p.nombre,
